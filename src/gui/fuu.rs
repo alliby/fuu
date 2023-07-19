@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use style::{COLUMN_SPACING, CONTAINER_PADDING, DEFAULT_IMG_WIDTH, ROW_SPACING};
 
 static SCROLLABLE_ID: Lazy<scrollable::Id> = Lazy::new(scrollable::Id::unique);
-static CACHE_COUNTER: AtomicUsize = AtomicUsize::new(0);
+static MEMORY_USAGE: AtomicUsize = AtomicUsize::new(0);
 static COMMAND_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 const COMMANDS_NUM: usize = 4;
@@ -308,14 +308,14 @@ impl Fuu {
                 }
                 let memory_use = img_data.width * img_data.height * 4;
                 self.images[index].image_state = ImageState::Loaded(img_data);
-                let counter = CACHE_COUNTER.load(Ordering::Relaxed) + memory_use as usize;
-                CACHE_COUNTER.store(counter, Ordering::Relaxed);
+                let counter = MEMORY_USAGE.load(Ordering::Relaxed) + memory_use as usize;
+                MEMORY_USAGE.store(counter, Ordering::Relaxed);
                 if counter > MAX_MEM_USE {
                     self.images
                         .iter_mut()
                         .filter(|image| matches!(image.image_state, ImageState::Loaded(_)))
                         .for_each(|image| image.image_state = ImageState::Loading);
-                    CACHE_COUNTER.store(0, Ordering::Relaxed);
+                    MEMORY_USAGE.store(0, Ordering::Relaxed);
                 }
                 Command::none()
             }
