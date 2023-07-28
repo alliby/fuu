@@ -4,5 +4,5 @@ pub enum Page {
     Loading,
     Gallery,
     ShowImage,
-    Error(String)
+    Error(String),
 }

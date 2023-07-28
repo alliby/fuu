@@ -1,6 +1,6 @@
 use crate::gui::Message;
+use iced::widget::{container, text};
 use iced::{Element, Length};
-use iced::widget::{text, container};
 
 pub fn loading_page(message: &str) -> Element<Message> {
     container(text(message))
@@ -10,4 +10,3 @@ pub fn loading_page(message: &str) -> Element<Message> {
         .center_y()
         .into()
 }
-

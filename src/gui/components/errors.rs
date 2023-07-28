@@ -1,6 +1,6 @@
 use crate::gui::Message;
+use iced::widget::{container, text};
 use iced::{Element, Length};
-use iced::widget::{text, container};
 
 pub fn error_view(error_message: &str) -> Element<Message> {
     container(text(error_message))

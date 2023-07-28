@@ -1,6 +1,6 @@
-use iced::font::Font;
-use iced::widget::{ text, Text };
 use iced::alignment;
+use iced::font::Font;
+use iced::widget::{text, Text};
 
 const ICONS: Font = Font::with_name("Font Awesome 6 Free Regular");
 
@@ -19,4 +19,3 @@ pub fn arrow_left_icon() -> Text<'static> {
 pub fn arrow_right_icon() -> Text<'static> {
     icon('\u{F061}')
 }
-
