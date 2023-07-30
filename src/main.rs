@@ -2,12 +2,11 @@ pub mod gui;
 pub mod utils;
 
 use gui::fuu::Fuu;
+use gui::types::ImageSource;
 use iced::{Application, Settings};
 use std::env;
-use std::path::Path;
 
 fn main() -> iced::Result {
-    let args: String = env::args().nth(1).unwrap();
-
-    Fuu::run(Settings::with_flags(Path::new(&args).into()))
+    let sources: Vec<ImageSource> = env::args().skip(1).map(ImageSource::new).collect();
+    Fuu::run(Settings::with_flags(sources))
 }
