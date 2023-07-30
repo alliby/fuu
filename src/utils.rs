@@ -80,11 +80,7 @@ pub async fn image_dimensions<P: AsRef<Path>>(image_path: P) -> ImageResult<(u32
 }
 
 async fn fetch_url(url: url::Url) -> reqwest::Result<Bytes> {
-    let bytes = reqwest::get(url).await?.bytes().await?;
-    if !infer::is_image(&bytes) {
-        return Err(Default::default());
-    }
-    Ok(bytes)
+    reqwest::get(url).await?.bytes().await
 }
 
 async fn fetch_file<P: AsRef<Path>>(file_path: P) -> Result<Bytes> {
