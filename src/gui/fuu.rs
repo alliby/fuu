@@ -1,24 +1,21 @@
 use crate::gui::style;
-use crate::gui::types::{ImageCard, ImageData, ImageState, Page, ThumbState};
+use crate::gui::types::*;
 use crate::gui::Message;
-use crate::utils::generate_thumb;
+use crate::utils::*;
 use crate::gui::components::image_preview;
 
 use iced::keyboard::KeyCode;
 use iced::widget::image::{Handle, Image};
-use iced::widget::scrollable::{AbsoluteOffset, Properties};
-use iced::widget::{button, column, container, row, scrollable, Button};
+use iced::widget::scrollable::AbsoluteOffset;
+use iced::widget::{button, text, column, container, row, scrollable, Button};
 use iced::{theme, Command, Element};
 use once_cell::sync::Lazy;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use style::{COLUMN_SPACING, CONTAINER_PADDING, DEFAULT_IMG_WIDTH, ROW_SPACING};
 
 static SCROLLABLE_ID: Lazy<scrollable::Id> = Lazy::new(scrollable::Id::unique);
-static MEMORY_USAGE: AtomicUsize = AtomicUsize::new(0);
 static COMMAND_COUNTER: AtomicUsize = AtomicUsize::new(0);
-
 const COMMANDS_NUM: usize = 4;
-const MAX_MEM_USE: usize = 209715200; // 200MB
 
 #[derive(Default)]
 pub struct Fuu {
@@ -120,16 +117,16 @@ impl Fuu {
         Command::none()
     }
 
-    fn update_image_data(&self) -> Command<Message> {
+    fn update_preview_data(&self) -> Command<Message> {
         let index = self.selected;
         let image_card = &self.images[index];
-        if let ImageState::Loading = image_card.image_state {
-            let image_path = image_card.image_path.clone();
-            return Command::perform(ImageData::new(image_path), move |data| {
-                Message::ImageLoaded(data.ok(), index)
-            });
+        match image_card.preview_state {
+            ImageState::Loading => {
+                let source = image_card.preview.clone();
+                Command::perform(fetch_source(source), move |rgba_image| Message::PreviewLoaded(rgba_image, index))
+            }
+            _ => Command::none()
         }
-        Command::none()
     }
 
     pub fn image_preview(&self) -> Element<Message> {
@@ -140,11 +137,12 @@ impl Fuu {
         let image_card = &self.images[index];
         let (w, h) = image_card.resize(self.img_width);
         button(match &image_card.thumb_state {
-            ThumbState::Loading => Element::new(column![].width(w as u16).height(h as u16)),
+            ThumbState::Loading => Element::new(column![text("Loading ...")].width(w as u16).height(h as u16)),
+            ThumbState::Error => Element::new(text("Error loading image ...").width(w as u16).height(h as u16)),
             ThumbState::Loaded => Element::new(
-                Image::new(Handle::from_path(&image_card.thumb_path))
+                Image::new(Handle::from_path(image_card.thumb.as_path()))
                     .width(w as u16)
-                    .height(h as u16),
+                    .height(h as u16)
             )
         })
         .on_press(Message::ChangeFocus(index))
@@ -183,7 +181,6 @@ impl Fuu {
             .center_x();
 
         scrollable(content)
-            .vertical_scroll(Properties::new().scroller_width(5).width(4.5))
             .id(SCROLLABLE_ID.clone())
             .on_scroll(Message::Scrolled)
             .width(container_width)
@@ -205,23 +202,26 @@ impl Fuu {
                 }
                 KeyCode::Left | KeyCode::P => {
                     self.selected = self.get_backward();
-                    if let Page::ShowImage = self.current_page {
-                        return self.update_image_data();
+                    match self.current_page {
+                        Page::Gallery => self.update_scroll_offset(),
+                        Page::ShowImage => self.update_preview_data(),
+                        _ => Command::none()
                     }
-                    self.update_scroll_offset()
                 }
                 KeyCode::Right | KeyCode::N => {
                     self.selected = self.get_forward();
-                    if let Page::ShowImage = self.current_page {
-                        return self.update_image_data();
+                    match self.current_page {
+                        Page::Gallery => self.update_scroll_offset(),
+                        Page::ShowImage => self.update_preview_data(),
+                        _ => Command::none()
                     }
-                    self.update_scroll_offset()
                 }
                 KeyCode::Up => {
                     if let Page::Gallery = self.current_page {
                         self.selected = self.get_top();
+                        return self.update_scroll_offset()
                     }
-                    self.update_scroll_offset()
+                    Command::none()
                 }
                 KeyCode::Down => {
                     if let Page::Gallery = self.current_page {
@@ -236,7 +236,7 @@ impl Fuu {
                 KeyCode::Enter => match self.current_page {
                     Page::Gallery => {
                         self.current_page = Page::ShowImage;
-                        self.update_image_data()
+                        self.update_preview_data()
                     }
                     Page::ShowImage => {
                         self.current_page = Page::Gallery;
@@ -254,7 +254,7 @@ impl Fuu {
             Message::ChangeFocus(selected) => {
                 if self.selected == selected {
                     self.current_page = Page::ShowImage;
-                    return self.update_image_data();
+                    return self.update_preview_data();
                 }
                 self.selected = selected;
                 self.update_scroll_offset()
@@ -263,14 +263,14 @@ impl Fuu {
                 self.current_scroll_offset = viewport.absolute_offset();
                 Command::none()
             }
-            Message::PathsLoaded(Ok(paths)) => {
-                self.images = paths.into_iter().map(ImageCard::new).collect();
+            Message::SourcesLoaded(sources) => {
+                if sources.is_empty() {
+                    self.current_page = Page::Error("no valid source found".into());
+                    return Command::none()
+                }
+                self.images = sources.into_iter().map(ImageCard::new).collect();
                 self.current_page = Page::Gallery;
-                Command::perform(async {}, move |_| Message::LoadThumbs)
-            }
-            Message::PathsLoaded(Err(io_error)) => {
-                self.current_page = Page::Error(io_error);
-                Command::none()
+                Command::perform(async {}, |_| Message::LoadThumbs)
             }
             Message::LoadThumbs => Command::batch(
                 self.images
@@ -279,17 +279,16 @@ impl Fuu {
                     .filter(|(_,image_card)| matches!(image_card.thumb_state, ThumbState::Loading))
                     .take(COMMANDS_NUM)
                     .map(|(i, image_card)| {
-                        let image_path = image_card.image_path.clone();
-                        let thumb_path = image_card.thumb_path.clone();
-                        let resize_dim = (image_card.width, image_card.height);
                         Command::perform(
-                            generate_thumb(image_path, thumb_path, resize_dim),
-                            move |_| Message::ThumbLoaded(i),
+                            generate_thumb(image_card.clone()),
+                            move |dim| Message::ThumbLoaded(dim, i),
                         )
                     }),
             ),
-            Message::ThumbLoaded(index) => {
-                self.images[index].thumb_state = ThumbState::Loaded;
+            Message::ThumbLoaded(Some(dim), index) => {
+                let mut image_card = &mut self.images[index];
+                (image_card.width, image_card.height) = dim;
+                image_card.thumb_state = ThumbState::Loaded;
                 let counter = COMMAND_COUNTER.load(Ordering::Relaxed) + 1;
                 COMMAND_COUNTER.store(counter, Ordering::Relaxed);
                 if counter == COMMANDS_NUM {
@@ -298,25 +297,19 @@ impl Fuu {
                 }
                 Command::none()
             }
-            Message::ImageLoaded(None, index) => {
-                self.images[index].image_state = ImageState::Error;
+            Message::ThumbLoaded(None, index) => {
+                self.images[index].thumb_state = ThumbState::Error;
                 Command::none()
             }
-            Message::ImageLoaded(Some(img_data), index) => {
+            Message::PreviewLoaded(Some(rgba_image), index) => {
                 if self.selected != index {
                     return Command::none();
                 }
-                let memory_use = img_data.width * img_data.height * 4;
-                self.images[index].image_state = ImageState::Loaded(img_data);
-                let counter = MEMORY_USAGE.load(Ordering::Relaxed) + memory_use as usize;
-                MEMORY_USAGE.store(counter, Ordering::Relaxed);
-                if counter > MAX_MEM_USE {
-                    self.images
-                        .iter_mut()
-                        .filter(|image| matches!(image.image_state, ImageState::Loaded(_)))
-                        .for_each(|image| image.image_state = ImageState::Loading);
-                    MEMORY_USAGE.store(0, Ordering::Relaxed);
-                }
+                self.images[index].preview_state = ImageState::Loaded(rgba_image);
+                Command::none()
+            }
+            Message::PreviewLoaded(None, index) => {
+                self.images[index].preview_state = ImageState::Error;
                 Command::none()
             }
             _ => Command::none(),
