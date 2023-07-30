@@ -1,18 +1,16 @@
+pub mod components;
 pub mod fuu;
 pub mod style;
 pub mod types;
-pub mod components;
 
-use crate::utils::{create_cache_dir, read_dir};
-use crate::gui::components::{ error_view, loading_page };
+use crate::gui::components::{error_view, loading_page};
+use crate::utils::*;
 use fuu::Fuu;
 use iced::font;
 use iced::keyboard::{self, KeyCode};
 use iced::widget::scrollable::Viewport;
-use iced::widget::{container, text};
-use iced::{executor, window, Application, Command, Element, Event, Length, Subscription, Theme};
-use std::path::PathBuf;
-use types::{ImageData, Page};
+use iced::{executor, window, Application, Command, Element, Event, Subscription, Theme};
+use types::*;
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -21,9 +19,9 @@ pub enum Message {
     ChangeFocus(usize),
     Scrolled(Viewport),
     FontLoaded(Result<(), font::Error>),
-    PathsLoaded(Result<Vec<PathBuf>, String>),
-    ThumbLoaded(usize),
-    ImageLoaded(Option<ImageData>, usize),
+    SourcesLoaded(Vec<ImageSource>),
+    ThumbLoaded(Option<(u32,u32)>, usize),
+    PreviewLoaded(Option<bytes::Bytes>, usize),
     LoadThumbs,
 }
 
@@ -31,7 +29,7 @@ impl Application for Fuu {
     type Executor = executor::Default;
     type Message = Message;
     type Theme = iced::Theme;
-    type Flags = PathBuf;
+    type Flags = Vec<ImageSource>;
 
     fn new(flags: Self::Flags) -> (Self, Command<Message>) {
         (
@@ -41,10 +39,10 @@ impl Application for Fuu {
                     .map(Message::FontLoaded),
                 Command::perform(
                     async {
-                        create_cache_dir().await?;
-                        read_dir(flags).await
+                        create_cache_dir().await.expect("Cannot create cache dir");
+                        read_sources(flags).await
                     },
-                    |result| Message::PathsLoaded(result.map_err(|err| err.to_string())),
+                    Message::SourcesLoaded,
                 ),
             ]),
         )
@@ -67,7 +65,7 @@ impl Application for Fuu {
             Page::Loading => loading_page("loading ..."),
             Page::Gallery => self.gallery_view(),
             Page::ShowImage => self.image_preview(),
-            Page::Error(err_msg) => error_view(err_msg)
+            Page::Error(err_msg) => error_view(err_msg),
         }
     }
 
