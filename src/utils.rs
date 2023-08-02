@@ -79,8 +79,14 @@ pub async fn image_dimensions<P: AsRef<Path>>(image_path: P) -> ImageResult<(u32
         .into_dimensions()
 }
 
-async fn fetch_url(url: url::Url) -> reqwest::Result<Bytes> {
-    reqwest::get(url).await?.bytes().await
+// unfortunately we cannot construct new error from reqwest::Error
+async fn fetch_url(url: url::Url) -> std::result::Result<Bytes, Box<dyn std::error::Error + Send + Sync>> {
+    use std::io::{Error, ErrorKind};
+    let bytes = reqwest::get(url).await?.bytes().await?;
+    if !infer::is_image(&bytes) {
+        return Err(Box::new(Error::from(ErrorKind::InvalidData)));
+    }
+    Ok(bytes)
 }
 
 async fn fetch_file<P: AsRef<Path>>(file_path: P) -> Result<Bytes> {
