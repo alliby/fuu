@@ -197,7 +197,7 @@ impl Fuu {
                 }
                 KeyCode::Minus | KeyCode::NumpadSubtract => {
                     self.img_width -= 20;
-                    self.img_width = self.img_width.max(100);
+                    self.img_width = self.img_width.max(DEFAULT_IMG_WIDTH / 2);
                     self.update_scroll_offset()
                 }
                 KeyCode::Left | KeyCode::P => {
