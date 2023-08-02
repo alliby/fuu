@@ -1,7 +1,6 @@
 use std::os::unix::ffi::OsStrExt;
 use crate::gui::types::*;
 use image::error::{ImageError, ImageResult};
-use image::ImageFormat;
 use md5::{Digest, Md5};
 use std::io::BufReader;
 use std::io::Result;
@@ -115,7 +114,9 @@ pub async fn generate_thumb(image_card: ImageCard) -> Option<(u32,u32)> {
             }
             let input_file = File::open(&preview_path).await.ok()?;
             let reader = BufReader::new(input_file.into_std().await);
-            let input_image = image::load(reader, ImageFormat::from_path(&preview_path).ok()?).ok()?;
+            let input_image = image::io::Reader::new(reader)
+                .with_guessed_format().ok()?
+                .decode().ok()?;
             let ratio = input_image.width() as f32 / input_image.height() as f32;
             let new_height = (image_card.width as f32 / ratio) as u32;
             let mut writer = File::create(thumb_dest)
