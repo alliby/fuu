@@ -302,10 +302,9 @@ impl Fuu {
                 Command::none()
             }
             Message::PreviewLoaded(Some(rgba_image), index) => {
-                if self.selected != index {
-                    return Command::none();
+                if self.selected == index {
+                    self.images[index].preview_state = ImageState::Loaded(rgba_image);
                 }
-                self.images[index].preview_state = ImageState::Loaded(rgba_image);
                 Command::none()
             }
             Message::PreviewLoaded(None, index) => {
