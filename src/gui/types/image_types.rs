@@ -87,7 +87,7 @@ impl ImageCard {
     }
 
     fn from_url(url: url::Url) -> Self {
-        let thumb_path = thumb_path(&thumb_path(url.as_str()));
+        let thumb_path = thumb_path(thumb_path(url.as_str()));
         Self {
             preview: ImageSource::Url(url),
             thumb: ImageSource::Path(thumb_path),

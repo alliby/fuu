@@ -110,7 +110,7 @@ pub async fn generate_thumb(image_card: ImageCard) -> Option<(u32,u32)> {
     match (image_card.preview, image_card.thumb) {
         (ImageSource::Path(preview_path), ImageSource::Path(thumb_dest)) => {
             if preview_path.exists() && thumb_dest.exists() {
-                return Some(image_dimensions(thumb_dest).await.ok()?)
+                return image_dimensions(thumb_dest).await.ok()
             }
             let input_file = File::open(&preview_path).await.ok()?;
             let reader = BufReader::new(input_file.into_std().await);
@@ -130,7 +130,7 @@ pub async fn generate_thumb(image_card: ImageCard) -> Option<(u32,u32)> {
         (ImageSource::Url(preview_url), ImageSource::Path(thumb_dest)) => {
             let preview_path = thumb_path(preview_url.as_str());
             if preview_path.exists() && thumb_dest.exists() {
-                return Some(image_dimensions(thumb_dest).await.ok()?)
+                return image_dimensions(thumb_dest).await.ok()
             }
             let preview_data = fetch_url(preview_url).await.ok()?;
             let input_image = image::load_from_memory(&preview_data).ok()?;
