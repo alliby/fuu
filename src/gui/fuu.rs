@@ -263,7 +263,8 @@ impl Fuu {
                     self.current_page = Page::Error("no valid source found".into());
                     return Command::none()
                 }
-                self.images = sources.into_iter().map(ImageCard::new).collect();
+                self.images.reserve(sources.len());
+                self.images.extend(sources.into_iter().map(ImageCard::new));
                 self.current_page = Page::Gallery;
                 Command::perform(async {}, |_| Message::LoadThumbs)
             }
@@ -305,6 +306,10 @@ impl Fuu {
             Message::PreviewLoaded(None, index) => {
                 self.images[index].preview_state = ImageState::Error;
                 Command::none()
+            }
+            Message::FileDropped(file_path) => {
+                let sources = ImageSource::Path(file_path);
+                Command::perform(read_sources(vec![sources]), Message::SourcesLoaded)
             }
             _ => Command::none(),
         }

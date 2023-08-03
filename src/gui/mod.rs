@@ -9,6 +9,7 @@ use fuu::Fuu;
 use iced::font;
 use iced::keyboard::{self, KeyCode};
 use iced::{executor, window, Application, Command, Element, Event, Subscription, Theme};
+use std::path::PathBuf;
 use types::*;
 
 #[derive(Debug, Clone)]
@@ -20,6 +21,7 @@ pub enum Message {
     SourcesLoaded(Vec<ImageSource>),
     ThumbLoaded(Option<(u32,u32)>, usize),
     PreviewLoaded(Option<bytes::Bytes>, usize),
+    FileDropped(PathBuf),
     LoadThumbs,
 }
 
@@ -74,6 +76,9 @@ impl Application for Fuu {
             }
             Event::Window(window::Event::Resized { width, height }) => {
                 Some(Message::WindowResize { width, height })
+            }
+            Event::Window(window::Event::FileDropped(file_path)) => {
+                Some(Message::FileDropped(file_path))
             }
             _ => None,
         })
