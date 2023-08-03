@@ -182,7 +182,6 @@ impl Fuu {
 
         scrollable(content)
             .id(SCROLLABLE_ID.clone())
-            .on_scroll(Message::Scrolled)
             .width(container_width)
             .into()
     }
@@ -258,10 +257,6 @@ impl Fuu {
                 }
                 self.selected = selected;
                 self.update_scroll_offset()
-            }
-            Message::Scrolled(viewport) => {
-                self.current_scroll_offset = viewport.absolute_offset();
-                Command::none()
             }
             Message::SourcesLoaded(sources) => {
                 if sources.is_empty() {

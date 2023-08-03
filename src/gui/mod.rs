@@ -8,7 +8,6 @@ use crate::utils::*;
 use fuu::Fuu;
 use iced::font;
 use iced::keyboard::{self, KeyCode};
-use iced::widget::scrollable::Viewport;
 use iced::{executor, window, Application, Command, Element, Event, Subscription, Theme};
 use types::*;
 
@@ -17,7 +16,6 @@ pub enum Message {
     WindowResize { width: u32, height: u32 },
     KeyPress(KeyCode),
     ChangeFocus(usize),
-    Scrolled(Viewport),
     FontLoaded(Result<(), font::Error>),
     SourcesLoaded(Vec<ImageSource>),
     ThumbLoaded(Option<(u32,u32)>, usize),
