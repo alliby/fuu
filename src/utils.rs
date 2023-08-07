@@ -1,7 +1,6 @@
 use std::os::unix::ffi::OsStrExt;
 use crate::gui::types::*;
 use image::error::{ImageError, ImageResult};
-use image::ImageFormat;
 use md5::{Digest, Md5};
 use std::io::BufReader;
 use std::io::Result;
@@ -79,8 +78,14 @@ pub async fn image_dimensions<P: AsRef<Path>>(image_path: P) -> ImageResult<(u32
         .into_dimensions()
 }
 
-async fn fetch_url(url: url::Url) -> reqwest::Result<Bytes> {
-    reqwest::get(url).await?.bytes().await
+// unfortunately we cannot construct new error from reqwest::Error
+async fn fetch_url(url: url::Url) -> std::result::Result<Bytes, Box<dyn std::error::Error + Send + Sync>> {
+    use std::io::{Error, ErrorKind};
+    let bytes = reqwest::get(url).await?.bytes().await?;
+    if !infer::is_image(&bytes) {
+        return Err(Box::new(Error::from(ErrorKind::InvalidData)));
+    }
+    Ok(bytes)
 }
 
 async fn fetch_file<P: AsRef<Path>>(file_path: P) -> Result<Bytes> {
@@ -105,11 +110,13 @@ pub async fn generate_thumb(image_card: ImageCard) -> Option<(u32,u32)> {
     match (image_card.preview, image_card.thumb) {
         (ImageSource::Path(preview_path), ImageSource::Path(thumb_dest)) => {
             if preview_path.exists() && thumb_dest.exists() {
-                return Some(image_dimensions(thumb_dest).await.ok()?)
+                return image_dimensions(thumb_dest).await.ok()
             }
             let input_file = File::open(&preview_path).await.ok()?;
             let reader = BufReader::new(input_file.into_std().await);
-            let input_image = image::load(reader, ImageFormat::from_path(&preview_path).ok()?).ok()?;
+            let input_image = image::io::Reader::new(reader)
+                .with_guessed_format().ok()?
+                .decode().ok()?;
             let ratio = input_image.width() as f32 / input_image.height() as f32;
             let new_height = (image_card.width as f32 / ratio) as u32;
             let mut writer = File::create(thumb_dest)
@@ -123,7 +130,7 @@ pub async fn generate_thumb(image_card: ImageCard) -> Option<(u32,u32)> {
         (ImageSource::Url(preview_url), ImageSource::Path(thumb_dest)) => {
             let preview_path = thumb_path(preview_url.as_str());
             if preview_path.exists() && thumb_dest.exists() {
-                return Some(image_dimensions(thumb_dest).await.ok()?)
+                return image_dimensions(thumb_dest).await.ok()
             }
             let preview_data = fetch_url(preview_url).await.ok()?;
             let input_image = image::load_from_memory(&preview_data).ok()?;

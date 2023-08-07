@@ -2,6 +2,8 @@ use bytes::Bytes;
 use crate::gui::style::DEFAULT_IMG_WIDTH;
 use crate::utils::*;
 use std::path::PathBuf;
+use std::ffi::OsStr;
+use std::hash::{Hash, Hasher};
 
 #[derive(Default, Clone, Debug)]
 pub enum ThumbState {
@@ -25,12 +27,6 @@ pub enum ImageSource {
     Url(url::Url),
 }
 
-impl Default for ImageSource {
-    fn default() -> Self {
-        Self::Path(Default::default())
-    }
-}
-
 impl ImageSource {
     pub fn new<S: AsRef<str>>(input: S) -> Self {
         match url::Url::parse(input.as_ref()) {
@@ -39,11 +35,36 @@ impl ImageSource {
         }
     }
 
+    fn as_os_str(&self) -> &OsStr {
+        match self {
+            Self::Url(url) => OsStr::new(url.as_str()),
+            Self::Path(pathbuf) => pathbuf.as_os_str()
+        }
+    }
+
     pub fn as_path(&self) -> PathBuf {
         match self {
             Self::Url(url) => thumb_path(url.as_str()),
             Self::Path(pathbuf) => pathbuf.to_path_buf()
         }
+    }
+}
+
+impl Default for ImageSource {
+    fn default() -> Self {
+        Self::Path(Default::default())
+    }
+}
+
+impl std::cmp::PartialEq for ImageSource {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_os_str() == other.as_os_str()
+    }
+}
+
+impl Hash for ImageSource {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.as_os_str().hash(state);
     }
 }
 
@@ -57,18 +78,6 @@ pub struct ImageCard {
     pub preview_state: ImageState,
 }
 
-impl Default for ImageCard {
-    fn default() -> Self {
-        Self {
-            width: DEFAULT_IMG_WIDTH,
-            height: DEFAULT_IMG_WIDTH,
-            thumb: Default::default(),
-            preview: Default::default(),
-            thumb_state: Default::default(),
-            preview_state: Default::default(),
-        }
-    }
-}
 
 impl ImageCard {
     pub fn resize(&self, new_width: u32) -> (u32, u32) {
@@ -87,7 +96,7 @@ impl ImageCard {
     }
 
     fn from_url(url: url::Url) -> Self {
-        let thumb_path = thumb_path(&thumb_path(url.as_str()));
+        let thumb_path = thumb_path(thumb_path(url.as_str()));
         Self {
             preview: ImageSource::Url(url),
             thumb: ImageSource::Path(thumb_path),
@@ -100,5 +109,32 @@ impl ImageCard {
             ImageSource::Path(path) => Self::from_path(path),
             ImageSource::Url(url) => Self::from_url(url),
         }
+    }
+}
+
+impl Default for ImageCard {
+    fn default() -> Self {
+        Self {
+            width: DEFAULT_IMG_WIDTH,
+            height: DEFAULT_IMG_WIDTH,
+            thumb: Default::default(),
+            preview: Default::default(),
+            thumb_state: Default::default(),
+            preview_state: Default::default(),
+        }
+    }
+}
+
+impl std::cmp::PartialEq for ImageCard {
+    fn eq(&self, other: &Self) -> bool {
+        self.preview == other.preview
+    }
+}
+
+impl std::cmp::Eq for ImageCard { }
+
+impl Hash for ImageCard {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.preview.hash(state);
     }
 }

@@ -11,6 +11,7 @@ use iced::widget::{button, text, column, container, row, scrollable, Button};
 use iced::{theme, Command, Element};
 use once_cell::sync::Lazy;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::collections::HashSet;
 use style::{COLUMN_SPACING, CONTAINER_PADDING, DEFAULT_IMG_WIDTH, ROW_SPACING};
 
 static SCROLLABLE_ID: Lazy<scrollable::Id> = Lazy::new(scrollable::Id::unique);
@@ -19,6 +20,7 @@ const COMMANDS_NUM: usize = 4;
 
 #[derive(Default)]
 pub struct Fuu {
+    pub file_drag: bool,
     pub current_page: Page,
     pub images: Vec<ImageCard>,
     pub container_dim: (u32, u32),
@@ -182,7 +184,6 @@ impl Fuu {
 
         scrollable(content)
             .id(SCROLLABLE_ID.clone())
-            .on_scroll(Message::Scrolled)
             .width(container_width)
             .into()
     }
@@ -197,7 +198,7 @@ impl Fuu {
                 }
                 KeyCode::Minus | KeyCode::NumpadSubtract => {
                     self.img_width -= 20;
-                    self.img_width = self.img_width.max(100);
+                    self.img_width = self.img_width.max(DEFAULT_IMG_WIDTH / 2);
                     self.update_scroll_offset()
                 }
                 KeyCode::Left | KeyCode::P => {
@@ -259,16 +260,15 @@ impl Fuu {
                 self.selected = selected;
                 self.update_scroll_offset()
             }
-            Message::Scrolled(viewport) => {
-                self.current_scroll_offset = viewport.absolute_offset();
-                Command::none()
-            }
             Message::SourcesLoaded(sources) => {
-                if sources.is_empty() {
+                let mut image_cards = HashSet::with_capacity(self.images.len());
+                image_cards.extend(self.images.drain(..));
+                image_cards.extend(sources.into_iter().map(ImageCard::new));
+                self.images = image_cards.into_iter().collect();
+                if self.images.is_empty() {
                     self.current_page = Page::Error("no valid source found".into());
                     return Command::none()
                 }
-                self.images = sources.into_iter().map(ImageCard::new).collect();
                 self.current_page = Page::Gallery;
                 Command::perform(async {}, |_| Message::LoadThumbs)
             }
@@ -302,14 +302,26 @@ impl Fuu {
                 Command::none()
             }
             Message::PreviewLoaded(Some(rgba_image), index) => {
-                if self.selected != index {
-                    return Command::none();
+                if self.selected == index {
+                    self.images[index].preview_state = ImageState::Loaded(rgba_image);
                 }
-                self.images[index].preview_state = ImageState::Loaded(rgba_image);
                 Command::none()
             }
             Message::PreviewLoaded(None, index) => {
                 self.images[index].preview_state = ImageState::Error;
+                Command::none()
+            }
+            Message::FileDropped(file_path) => {
+                self.file_drag = false;
+                let sources = ImageSource::Path(file_path);
+                Command::perform(read_sources(vec![sources]), Message::SourcesLoaded)
+            }
+            Message::FileHovered => {
+                self.file_drag = true;
+                Command::none()
+            }
+            Message::HideOverlay => {
+                self.file_drag = false;
                 Command::none()
             }
             _ => Command::none(),
