@@ -11,6 +11,7 @@ use iced::widget::{button, text, column, container, row, scrollable, Button};
 use iced::{theme, Command, Element};
 use once_cell::sync::Lazy;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::collections::HashSet;
 use style::{COLUMN_SPACING, CONTAINER_PADDING, DEFAULT_IMG_WIDTH, ROW_SPACING};
 
 static SCROLLABLE_ID: Lazy<scrollable::Id> = Lazy::new(scrollable::Id::unique);
@@ -19,6 +20,7 @@ const COMMANDS_NUM: usize = 4;
 
 #[derive(Default)]
 pub struct Fuu {
+    pub file_drag: bool,
     pub current_page: Page,
     pub images: Vec<ImageCard>,
     pub container_dim: (u32, u32),
@@ -259,12 +261,14 @@ impl Fuu {
                 self.update_scroll_offset()
             }
             Message::SourcesLoaded(sources) => {
-                if sources.is_empty() {
+                let mut image_cards = HashSet::with_capacity(self.images.len());
+                image_cards.extend(self.images.drain(..));
+                image_cards.extend(sources.into_iter().map(ImageCard::new));
+                self.images = image_cards.into_iter().collect();
+                if self.images.is_empty() {
                     self.current_page = Page::Error("no valid source found".into());
                     return Command::none()
                 }
-                self.images.reserve(sources.len());
-                self.images.extend(sources.into_iter().map(ImageCard::new));
                 self.current_page = Page::Gallery;
                 Command::perform(async {}, |_| Message::LoadThumbs)
             }
@@ -308,8 +312,17 @@ impl Fuu {
                 Command::none()
             }
             Message::FileDropped(file_path) => {
+                self.file_drag = false;
                 let sources = ImageSource::Path(file_path);
                 Command::perform(read_sources(vec![sources]), Message::SourcesLoaded)
+            }
+            Message::FileHovered => {
+                self.file_drag = true;
+                Command::none()
+            }
+            Message::HideOverlay => {
+                self.file_drag = false;
+                Command::none()
             }
             _ => Command::none(),
         }
