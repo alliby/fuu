@@ -138,21 +138,36 @@ impl Fuu {
     fn card_view(&self, index: usize) -> Button<Message> {
         let image_card = &self.images[index];
         let (w, h) = image_card.resize(self.img_width);
-        button(match &image_card.thumb_state {
-            ThumbState::Loading => Element::new(column![text("Loading ...")].width(w as u16).height(h as u16)),
-            ThumbState::Error => Element::new(text("Error loading image ...").width(w as u16).height(h as u16)),
+        let content = match &image_card.thumb_state {
+            ThumbState::Loading => Element::new(
+                container(text("Loading ...")
+                    .style(iced::Color::WHITE))
+                    .width(w as u16)
+                    .height(h as u16)
+                    .center_x()
+                    .center_y()
+            ),
+            ThumbState::Error => Element::new(
+                container(text("Error loading image ...")
+                    .style(iced::Color::WHITE))
+                    .width(w as u16)
+                    .height(h as u16)
+                    .center_x()
+                    .center_y()
+            ),
             ThumbState::Loaded => Element::new(
                 Image::new(Handle::from_path(image_card.thumb.as_path()))
                     .width(w as u16)
                     .height(h as u16)
             )
-        })
-        .on_press(Message::ChangeFocus(index))
-        .style(if index == self.selected {
-            theme::Button::Custom(Box::new(style::ImageCard::Selected))
-        } else {
-            theme::Button::Custom(Box::new(style::ImageCard::Normal))
-        })
+        };
+        button(content)
+            .on_press(Message::ChangeFocus(index))
+            .style(if index == self.selected {
+                theme::Button::Custom(Box::new(style::ImageCard::Selected))
+            } else {
+                theme::Button::Custom(Box::new(style::ImageCard::Normal))
+            })
     }
 
     pub fn gallery_view(&self) -> Element<Message> {
