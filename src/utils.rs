@@ -1,23 +1,21 @@
-use std::os::unix::ffi::OsStrExt;
 use crate::gui::types::*;
 use image::error::{ImageError, ImageResult};
 use md5::{Digest, Md5};
 use std::io::BufReader;
 use std::io::Result;
 use std::path::{Path, PathBuf};
-use std::ffi::OsStr;
 use tokio::fs::{self, File};
 use tokio::io::AsyncReadExt;
 use bytes::Bytes;
 
-fn hash<S: AsRef<OsStr>>(file_name: S) -> String {
+fn hash<P: AsRef<Path>>(file_name: P) -> String {
     let mut hasher = Md5::new();
-    hasher.update(file_name.as_ref().as_bytes());
+    hasher.update(file_name.as_ref().to_string_lossy().as_ref());
     let digest = hasher.finalize();
     format!("{:x}.png", digest)
 }
 
-pub fn thumb_path<S: AsRef<OsStr>>(file_name: S) -> PathBuf {
+pub fn thumb_path<P: AsRef<Path>>(file_name: P) -> PathBuf {
     let cache_dir = dirs::cache_dir().unwrap().join("fuu");
     let hashed_name = hash(file_name);
     cache_dir.join(hashed_name)
