@@ -200,6 +200,7 @@ impl Fuu {
         scrollable(content)
             .id(SCROLLABLE_ID.clone())
             .width(container_width)
+            .height(self.container_dim.1 as u16)
             .into()
     }
 
@@ -281,7 +282,7 @@ impl Fuu {
                 image_cards.extend(sources.into_iter().map(ImageCard::new));
                 self.images = image_cards.into_iter().collect();
                 if self.images.is_empty() {
-                    self.current_page = Page::Error("no valid source found".into());
+                    self.current_page = Page::Welcome;
                     return Command::none()
                 }
                 self.current_page = Page::Gallery;
