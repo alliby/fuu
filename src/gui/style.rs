@@ -1,4 +1,4 @@
-use iced::widget::button;
+use iced::widget::{button, container};
 use iced::Theme;
 
 pub const CONTAINER_PADDING: u32 = 10;
@@ -30,6 +30,24 @@ impl button::StyleSheet for ImageCard {
                 border_width: 2.0,
                 ..Default::default()
             },
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct ModalStyle;
+
+impl container::StyleSheet for ModalStyle {
+    type Style = Theme;
+    
+    fn appearance(&self, style: &Self::Style) -> container::Appearance {
+        let palette = style.palette();
+
+        container::Appearance {
+            text_color: palette.text.into(),
+            background: Some(palette.primary.into()),
+            border_radius: 10.0.into(),
+            ..Default::default()
         }
     }
 }
