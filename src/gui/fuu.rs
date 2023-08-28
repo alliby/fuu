@@ -302,7 +302,7 @@ impl Fuu {
                     }),
             ),
             Message::ThumbLoaded(Some(dim), index) => {
-                let mut image_card = &mut self.images[index];
+                let image_card = &mut self.images[index];
                 (image_card.width, image_card.height) = dim;
                 image_card.thumb_state = ThumbState::Loaded;
                 let counter = COMMAND_COUNTER.load(Ordering::Relaxed) + 1;
