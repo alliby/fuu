@@ -14,12 +14,7 @@ md-5 = "0.10.5"
 reqwest = "0.11.18"
 tokio = { version = "1", features = ["fs", "io-util"] }
 url = "2.4.0"
-
-[profile.dev]
-opt-level = 1
-
-[profile.dev.package."*"]
-opt-level = 3
+indexmap = "2.0.0"
 
 [profile.release]
 lto = true
