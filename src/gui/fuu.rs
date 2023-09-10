@@ -21,6 +21,7 @@ const COMMANDS_NUM: usize = 4;
 #[derive(Default)]
 pub struct Fuu {
     pub file_drag: bool,
+    pub show_selections: bool,
     pub current_page: Page,
     pub images: Vec<ImageCard>,
     pub container_dim: (u32, u32),
@@ -121,7 +122,11 @@ impl Fuu {
     }
 
     fn update_preview_data(&self) -> Command<Message> {
-        let index = self.selected;
+        let index = if self.show_selections {
+            self.selections_list[self.selected]
+        } else {
+            self.selected
+        };
         let image_card = &self.images[index];
         match image_card.preview_state {
             ImageState::Loading => {
@@ -133,18 +138,27 @@ impl Fuu {
     }
 
     pub fn image_preview(&self) -> Element<Message> {
-        let image_card = if let Page::Selection = self.current_page {
+        let image_card = if self.show_selections {
             let index = self.selected.min(self.selections_list.len() - 1);
             &self.images[self.selections_list[index]]
         } else {
             &self.images[self.selected]
         };
         image_preview(image_card, self.container_dim)
-        
+    }
+
+    fn card_style(&self, index: usize) -> theme::Button {
+        if index == self.selected {
+            return theme::Button::Custom(Box::new(style::ImageCard::Hovered))
+        }
+        if self.show_selections || self.selections_list.contains(&index) {
+            return theme::Button::Custom(Box::new(style::ImageCard::Selected))
+        }
+        theme::Button::Custom(Box::new(style::ImageCard::Normal))
     }
     
     fn card_view(&self, index: usize) -> Button<Message> {
-        let image_card = if let Page::Selection = self.current_page {
+        let image_card = if self.show_selections {
             &self.images[self.selections_list[index]]
         } else {
             &self.images[index]
@@ -175,18 +189,12 @@ impl Fuu {
         };
         button(content)
             .on_press(Message::ChangeFocus(index))
-            .style(if index == self.selected {
-                theme::Button::Custom(Box::new(style::ImageCard::Hovered))
-            } else if self.selections_list.contains(&index) {
-                theme::Button::Custom(Box::new(style::ImageCard::Selected))
-            } else {
-                theme::Button::Custom(Box::new(style::ImageCard::Normal))
-            })
+            .style(self.card_style(index))
     }
 
     pub fn gallery_view(&self) -> Element<Message> {
         let row_num = self.row_num();
-        let elem_num = if let Page::Selection = self.current_page {
+        let elem_num = if self.show_selections {
             self.selections_list.len()
         } else {
             self.images.len()
@@ -237,6 +245,9 @@ impl Fuu {
                 }
                 KeyCode::Left | KeyCode::P => {
                     self.selected = self.get_backward();
+                    if self.show_selections {
+                        self.selected = self.selected.min(self.selections_list.len() - 1)  
+                    }
                     match self.current_page {
                         Page::Gallery => return self.update_scroll_offset(),
                         Page::ShowImage => return self.update_preview_data(),
@@ -245,6 +256,9 @@ impl Fuu {
                 }
                 KeyCode::Right | KeyCode::N => {
                     self.selected = self.get_forward();
+                    if self.show_selections {
+                        self.selected = self.selected.min(self.selections_list.len() - 1)  
+                    }
                     match self.current_page {
                         Page::Gallery => return self.update_scroll_offset(),
                         Page::ShowImage => return self.update_preview_data(),
@@ -252,14 +266,20 @@ impl Fuu {
                     }
                 }
                 KeyCode::Up => {
+                    self.selected = self.get_top();
+                    if self.show_selections {
+                        self.selected = self.selected.min(self.selections_list.len() - 1)  
+                    }
                     if let Page::Gallery = self.current_page {
-                        self.selected = self.get_top();
                         return self.update_scroll_offset()
                     }
                 }
                 KeyCode::Down => {
+                    self.selected = self.get_bottom();
+                    if self.show_selections {
+                        self.selected = self.selected.min(self.selections_list.len() - 1)  
+                    }
                     if let Page::Gallery = self.current_page {
-                        self.selected = self.get_bottom();
                         return self.update_scroll_offset()
                     }
                 }
@@ -274,21 +294,24 @@ impl Fuu {
                     }
                     Page::ShowImage => {
                         self.current_page = Page::Gallery;
-                        return self.update_scroll_offset()
+                        return self.update_preview_data()
                     }
                     _ => (),
                 },
                 KeyCode::M => {
-                    if !self.selections_list.insert(self.selected) {
-                        self.selections_list.remove(&self.selected);
+                    let index = if self.show_selections {
+                        self.selections_list[self.selected]
+                    } else {
+                        self.selected
+                    };
+                    if !self.selections_list.insert(index) {
+                        self.selections_list.remove(&index);
                     }
                 },
                 KeyCode::Space => {
                     if let Page::Gallery = self.current_page {
-                        self.current_page = Page::Selection;
+                        self.show_selections ^= true;
                         self.selected = 0;
-                    } else {
-                        self.current_page = Page::Gallery
                     }
                 }
                 _ => (),
@@ -346,7 +369,7 @@ impl Fuu {
                 self.images[index].thumb_state = ThumbState::Error;
             }
             Message::PreviewLoaded(Some(rgba_image), index) => {
-                if self.selected == index {
+                if self.selected == index || self.selections_list.contains(&index) {
                     self.images[index].preview_state = ImageState::Loaded(rgba_image);
                 }
             }
