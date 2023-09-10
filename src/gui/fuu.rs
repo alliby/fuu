@@ -11,7 +11,7 @@ use iced::widget::{button, text, column, container, row, scrollable, Button};
 use iced::{theme, Command, Element};
 use once_cell::sync::Lazy;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::collections::HashSet;
+use indexmap::IndexSet;
 use style::{COLUMN_SPACING, CONTAINER_PADDING, DEFAULT_IMG_WIDTH, ROW_SPACING};
 
 static SCROLLABLE_ID: Lazy<scrollable::Id> = Lazy::new(scrollable::Id::unique);
@@ -26,6 +26,7 @@ pub struct Fuu {
     pub container_dim: (u32, u32),
     pub img_width: u32,
     pub selected: usize,
+    pub selections_list: IndexSet<usize>,
     pub current_scroll_offset: scrollable::AbsoluteOffset,
 }
 
@@ -132,11 +133,22 @@ impl Fuu {
     }
 
     pub fn image_preview(&self) -> Element<Message> {
-        image_preview(&self.images[self.selected], self.container_dim)
+        let image_card = if let Page::Selection = self.current_page {
+            let index = self.selected.min(self.selections_list.len() - 1);
+            &self.images[self.selections_list[index]]
+        } else {
+            &self.images[self.selected]
+        };
+        image_preview(image_card, self.container_dim)
+        
     }
     
     fn card_view(&self, index: usize) -> Button<Message> {
-        let image_card = &self.images[index];
+        let image_card = if let Page::Selection = self.current_page {
+            &self.images[self.selections_list[index]]
+        } else {
+            &self.images[index]
+        };
         let (w, h) = image_card.resize(self.img_width);
         let content = match &image_card.thumb_state {
             ThumbState::Loading => Element::new(
@@ -164,6 +176,8 @@ impl Fuu {
         button(content)
             .on_press(Message::ChangeFocus(index))
             .style(if index == self.selected {
+                theme::Button::Custom(Box::new(style::ImageCard::Hovered))
+            } else if self.selections_list.contains(&index) {
                 theme::Button::Custom(Box::new(style::ImageCard::Selected))
             } else {
                 theme::Button::Custom(Box::new(style::ImageCard::Normal))
@@ -172,7 +186,11 @@ impl Fuu {
 
     pub fn gallery_view(&self) -> Element<Message> {
         let row_num = self.row_num();
-        let elem_num = self.images.len();
+        let elem_num = if let Page::Selection = self.current_page {
+            self.selections_list.len()
+        } else {
+            self.images.len()
+        };
         let mut remaining = elem_num % row_num;
         let mut rows = row![]
             .spacing(ROW_SPACING as u16)
@@ -243,8 +261,9 @@ impl Fuu {
                 KeyCode::Down => {
                     if let Page::Gallery = self.current_page {
                         self.selected = self.get_bottom();
+                        return self.update_scroll_offset()
                     }
-                    self.update_scroll_offset()
+                    Command::none()
                 }
                 KeyCode::Equals | KeyCode::Key0 => {
                     self.img_width = self.container_dim.0 / 5;
@@ -261,6 +280,21 @@ impl Fuu {
                     }
                     _ => Command::none(),
                 },
+                KeyCode::M => {
+                    if !self.selections_list.insert(self.selected) {
+                        self.selections_list.remove(&self.selected);
+                    }
+                    Command::none()
+                },
+                KeyCode::Space => {
+                    if let Page::Gallery = self.current_page {
+                        self.current_page = Page::Selection;
+                        self.selected = 0;
+                    } else {
+                        self.current_page = Page::Gallery
+                    }
+                    Command::none()
+                }
                 _ => Command::none(),
             },
             Message::WindowResize { width, height } => {
@@ -277,9 +311,10 @@ impl Fuu {
                 self.update_scroll_offset()
             }
             Message::SourcesLoaded(sources) => {
-                let mut image_cards = HashSet::with_capacity(self.images.len());
-                image_cards.extend(self.images.drain(..));
-                image_cards.extend(sources.into_iter().map(ImageCard::new));
+                let mut image_cards = IndexSet::with_capacity(self.images.len());
+                image_cards.extend(self.images.drain(..).chain(
+                    sources.into_iter().map(ImageCard::new)
+                ));
                 self.images = image_cards.into_iter().collect();
                 if self.images.is_empty() {
                     self.current_page = Page::Welcome;

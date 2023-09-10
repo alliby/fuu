@@ -11,6 +11,7 @@ pub enum ImageCard {
     #[default]
     Normal,
     Selected,
+    Hovered,
 }
 
 impl button::StyleSheet for ImageCard {
@@ -21,12 +22,17 @@ impl button::StyleSheet for ImageCard {
 
         match self {
             ImageCard::Normal => button::Appearance {
-                border_color: palette.secondary.base.color,
+                border_color: palette.secondary.strong.color,
+                border_width: 2.0,
+                ..Default::default()
+            },
+            ImageCard::Hovered => button::Appearance {
+                border_color: palette.primary.strong.color,
                 border_width: 2.0,
                 ..Default::default()
             },
             ImageCard::Selected => button::Appearance {
-                border_color: palette.primary.strong.color,
+                border_color: palette.success.strong.color,
                 border_width: 2.0,
                 ..Default::default()
             },

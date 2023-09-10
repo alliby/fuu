@@ -70,7 +70,7 @@ impl Application for Fuu {
     fn view(&self) -> Element<Message> {
         let content = match &self.current_page {
             Page::Welcome => welcome_page(),
-            Page::Gallery => self.gallery_view(),
+            Page::Gallery | Page::Selection => self.gallery_view(),
             Page::ShowImage => self.image_preview(),
             Page::Error(err_msg) => error_view(err_msg),
         };
