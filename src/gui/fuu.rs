@@ -160,7 +160,7 @@ impl Fuu {
                     .center_y()
             ),
             ThumbState::Error => Element::new(
-                container(text("Error loading image ...")
+                container(text("Error loading image")
                     .style(iced::Color::WHITE))
                     .width(w as u16)
                     .height(h as u16)
