@@ -228,27 +228,27 @@ impl Fuu {
                 KeyCode::Plus | KeyCode::NumpadAdd => {
                     self.img_width += 20;
                     self.img_width = self.img_width.min(self.container_dim.0);
-                    self.update_scroll_offset()
+                    return self.update_scroll_offset()
                 }
                 KeyCode::Minus | KeyCode::NumpadSubtract => {
                     self.img_width -= 20;
                     self.img_width = self.img_width.max(DEFAULT_IMG_WIDTH / 2);
-                    self.update_scroll_offset()
+                    return self.update_scroll_offset()
                 }
                 KeyCode::Left | KeyCode::P => {
                     self.selected = self.get_backward();
                     match self.current_page {
-                        Page::Gallery => self.update_scroll_offset(),
-                        Page::ShowImage => self.update_preview_data(),
-                        _ => Command::none()
+                        Page::Gallery => return self.update_scroll_offset(),
+                        Page::ShowImage => return self.update_preview_data(),
+                        _ => ()
                     }
                 }
                 KeyCode::Right | KeyCode::N => {
                     self.selected = self.get_forward();
                     match self.current_page {
-                        Page::Gallery => self.update_scroll_offset(),
-                        Page::ShowImage => self.update_preview_data(),
-                        _ => Command::none()
+                        Page::Gallery => return self.update_scroll_offset(),
+                        Page::ShowImage => return self.update_preview_data(),
+                        _ => ()
                     }
                 }
                 KeyCode::Up => {
@@ -256,35 +256,32 @@ impl Fuu {
                         self.selected = self.get_top();
                         return self.update_scroll_offset()
                     }
-                    Command::none()
                 }
                 KeyCode::Down => {
                     if let Page::Gallery = self.current_page {
                         self.selected = self.get_bottom();
                         return self.update_scroll_offset()
                     }
-                    Command::none()
                 }
                 KeyCode::Equals | KeyCode::Key0 => {
                     self.img_width = self.container_dim.0 / 5;
-                    self.update_scroll_offset()
+                    return self.update_scroll_offset()
                 }
                 KeyCode::Enter => match self.current_page {
                     Page::Gallery => {
                         self.current_page = Page::ShowImage;
-                        self.update_preview_data()
+                        return self.update_preview_data()
                     }
                     Page::ShowImage => {
                         self.current_page = Page::Gallery;
-                        self.update_scroll_offset()
+                        return self.update_scroll_offset()
                     }
-                    _ => Command::none(),
+                    _ => (),
                 },
                 KeyCode::M => {
                     if !self.selections_list.insert(self.selected) {
                         self.selections_list.remove(&self.selected);
                     }
-                    Command::none()
                 },
                 KeyCode::Space => {
                     if let Page::Gallery = self.current_page {
@@ -293,14 +290,13 @@ impl Fuu {
                     } else {
                         self.current_page = Page::Gallery
                     }
-                    Command::none()
                 }
-                _ => Command::none(),
+                _ => (),
             },
             Message::WindowResize { width, height } => {
                 self.container_dim = (width, height);
                 self.img_width = width / 5;
-                self.update_scroll_offset()
+                return self.update_scroll_offset()
             }
             Message::ChangeFocus(selected) => {
                 if self.selected == selected {
@@ -308,7 +304,7 @@ impl Fuu {
                     return self.update_preview_data();
                 }
                 self.selected = selected;
-                self.update_scroll_offset()
+                return self.update_scroll_offset()
             }
             Message::SourcesLoaded(sources) => {
                 let mut image_cards = IndexSet::with_capacity(self.images.len());
@@ -316,14 +312,13 @@ impl Fuu {
                     sources.into_iter().map(ImageCard::new)
                 ));
                 self.images = image_cards.into_iter().collect();
-                if self.images.is_empty() {
-                    self.current_page = Page::Welcome;
-                    return Command::none()
+                if !self.images.is_empty() {
+                    self.current_page = Page::Gallery;
+                    return Command::perform(async {}, |_| Message::LoadThumbs)
                 }
-                self.current_page = Page::Gallery;
-                Command::perform(async {}, |_| Message::LoadThumbs)
+                self.current_page = Page::Welcome;
             }
-            Message::LoadThumbs => Command::batch(
+            Message::LoadThumbs => return Command::batch(
                 self.images
                     .iter()
                     .enumerate()
@@ -346,36 +341,31 @@ impl Fuu {
                     COMMAND_COUNTER.store(0, Ordering::Relaxed);
                     return Command::perform(async {}, |_| Message::LoadThumbs);
                 }
-                Command::none()
             }
             Message::ThumbLoaded(None, index) => {
                 self.images[index].thumb_state = ThumbState::Error;
-                Command::none()
             }
             Message::PreviewLoaded(Some(rgba_image), index) => {
                 if self.selected == index {
                     self.images[index].preview_state = ImageState::Loaded(rgba_image);
                 }
-                Command::none()
             }
             Message::PreviewLoaded(None, index) => {
                 self.images[index].preview_state = ImageState::Error;
-                Command::none()
             }
             Message::FileDropped(file_path) => {
                 self.file_drag = false;
                 let sources = ImageSource::Path(file_path);
-                Command::perform(read_sources(vec![sources]), Message::SourcesLoaded)
+                return Command::perform(read_sources(vec![sources]), Message::SourcesLoaded)
             }
             Message::FileHovered => {
                 self.file_drag = true;
-                Command::none()
             }
             Message::HideOverlay => {
                 self.file_drag = false;
-                Command::none()
             }
-            _ => Command::none(),
+            _ => (),
         }
+        Command::none()
     }
 }
