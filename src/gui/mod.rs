@@ -10,8 +10,8 @@ use crate::utils::*;
 use fuu::Fuu;
 use iced::font;
 use iced::keyboard::{self, KeyCode};
+use iced::widget::{container, text};
 use iced::{executor, window, Application, Command, Element, Event, Subscription, Theme};
-use iced::widget::{text, container};
 use std::path::PathBuf;
 use types::*;
 
@@ -22,12 +22,13 @@ pub enum Message {
     ChangeFocus(usize),
     FontLoaded(Result<(), font::Error>),
     SourcesLoaded(Vec<ImageSource>),
-    ThumbLoaded(Option<(u32,u32)>, usize),
+    ThumbLoaded(Option<(u32, u32)>, usize),
     PreviewLoaded(Option<bytes::Bytes>, usize),
     FileDropped(PathBuf),
     FileHovered,
     HideOverlay,
     LoadThumbs,
+    CloseRequested,
 }
 
 impl Application for Fuu {
@@ -100,12 +101,9 @@ impl Application for Fuu {
             Event::Window(window::Event::FileDropped(file_path)) => {
                 Some(Message::FileDropped(file_path))
             }
-            Event::Window(window::Event::FileHovered(_)) => {
-                Some(Message::FileHovered)
-            }
-            Event::Window(window::Event::FilesHoveredLeft) => {
-                Some(Message::HideOverlay)
-            }
+            Event::Window(window::Event::FileHovered(_)) => Some(Message::FileHovered),
+            Event::Window(window::Event::FilesHoveredLeft) => Some(Message::HideOverlay),
+            Event::Window(window::Event::CloseRequested) => Some(Message::CloseRequested),
             _ => None,
         })
     }

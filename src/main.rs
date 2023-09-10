@@ -8,5 +8,8 @@ use std::env;
 
 fn main() -> iced::Result {
     let sources: Vec<ImageSource> = env::args().skip(1).map(ImageSource::new).collect();
-    Fuu::run(Settings::with_flags(sources))
+    Fuu::run(Settings {
+        exit_on_close_request: false,
+        ..Settings::with_flags(sources)
+    })
 }

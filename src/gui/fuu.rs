@@ -1,17 +1,18 @@
+use crate::gui::components::image_preview;
 use crate::gui::style;
 use crate::gui::types::*;
 use crate::gui::Message;
 use crate::utils::*;
-use crate::gui::components::image_preview;
 
 use iced::keyboard::KeyCode;
 use iced::widget::image::{Handle, Image};
 use iced::widget::scrollable::AbsoluteOffset;
-use iced::widget::{button, text, column, container, row, scrollable, Button};
+use iced::widget::{button, column, container, row, scrollable, text, Button};
 use iced::{theme, Command, Element};
-use once_cell::sync::Lazy;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use indexmap::IndexSet;
+use once_cell::sync::Lazy;
+use std::io::{self, Write};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use style::{COLUMN_SPACING, CONTAINER_PADDING, DEFAULT_IMG_WIDTH, ROW_SPACING};
 
 static SCROLLABLE_ID: Lazy<scrollable::Id> = Lazy::new(scrollable::Id::unique);
@@ -131,9 +132,11 @@ impl Fuu {
         match image_card.preview_state {
             ImageState::Loading => {
                 let source = image_card.preview.clone();
-                Command::perform(fetch_source(source), move |rgba_image| Message::PreviewLoaded(rgba_image, index))
+                Command::perform(fetch_source(source), move |rgba_image| {
+                    Message::PreviewLoaded(rgba_image, index)
+                })
             }
-            _ => Command::none()
+            _ => Command::none(),
         }
     }
 
@@ -149,14 +152,14 @@ impl Fuu {
 
     fn card_style(&self, index: usize) -> theme::Button {
         if index == self.selected {
-            return theme::Button::Custom(Box::new(style::ImageCard::Hovered))
+            return theme::Button::Custom(Box::new(style::ImageCard::Hovered));
         }
         if self.show_selections || self.selections_list.contains(&index) {
-            return theme::Button::Custom(Box::new(style::ImageCard::Selected))
+            return theme::Button::Custom(Box::new(style::ImageCard::Selected));
         }
         theme::Button::Custom(Box::new(style::ImageCard::Normal))
     }
-    
+
     fn card_view(&self, index: usize) -> Button<Message> {
         let image_card = if self.show_selections {
             &self.images[self.selections_list[index]]
@@ -166,26 +169,24 @@ impl Fuu {
         let (w, h) = image_card.resize(self.img_width);
         let content = match &image_card.thumb_state {
             ThumbState::Loading => Element::new(
-                container(text("Loading ...")
-                    .style(iced::Color::WHITE))
+                container(text("Loading ...").style(iced::Color::WHITE))
                     .width(w as u16)
                     .height(h as u16)
                     .center_x()
-                    .center_y()
+                    .center_y(),
             ),
             ThumbState::Error => Element::new(
-                container(text("Error loading image")
-                    .style(iced::Color::WHITE))
+                container(text("Error loading image").style(iced::Color::WHITE))
                     .width(w as u16)
                     .height(h as u16)
                     .center_x()
-                    .center_y()
+                    .center_y(),
             ),
             ThumbState::Loaded => Element::new(
                 Image::new(Handle::from_path(image_card.thumb.as_path()))
                     .width(w as u16)
-                    .height(h as u16)
-            )
+                    .height(h as u16),
+            ),
         };
         button(content)
             .on_press(Message::ChangeFocus(index))
@@ -232,69 +233,77 @@ impl Fuu {
 
     pub fn update(&mut self, message: Message) -> Command<Message> {
         match message {
+            Message::CloseRequested => {
+                let mut stdout = io::stdout().lock();
+                self.selections_list
+                    .iter()
+                    .map(|index| &self.images[*index])
+                    .for_each(|image| writeln!(&mut stdout, "{:?}", image.preview).unwrap());
+                std::process::exit(0)
+            }
             Message::KeyPress(key) => match key {
                 KeyCode::Plus | KeyCode::NumpadAdd => {
                     self.img_width += 20;
                     self.img_width = self.img_width.min(self.container_dim.0);
-                    return self.update_scroll_offset()
+                    return self.update_scroll_offset();
                 }
                 KeyCode::Minus | KeyCode::NumpadSubtract => {
                     self.img_width -= 20;
                     self.img_width = self.img_width.max(DEFAULT_IMG_WIDTH / 2);
-                    return self.update_scroll_offset()
+                    return self.update_scroll_offset();
                 }
                 KeyCode::Left | KeyCode::P => {
                     self.selected = self.get_backward();
                     if self.show_selections {
-                        self.selected = self.selected.min(self.selections_list.len() - 1)  
+                        self.selected = self.selected.min(self.selections_list.len() - 1)
                     }
                     match self.current_page {
                         Page::Gallery => return self.update_scroll_offset(),
                         Page::ShowImage => return self.update_preview_data(),
-                        _ => ()
+                        _ => (),
                     }
                 }
                 KeyCode::Right | KeyCode::N => {
                     self.selected = self.get_forward();
                     if self.show_selections {
-                        self.selected = self.selected.min(self.selections_list.len() - 1)  
+                        self.selected = self.selected.min(self.selections_list.len() - 1)
                     }
                     match self.current_page {
                         Page::Gallery => return self.update_scroll_offset(),
                         Page::ShowImage => return self.update_preview_data(),
-                        _ => ()
+                        _ => (),
                     }
                 }
                 KeyCode::Up => {
                     self.selected = self.get_top();
                     if self.show_selections {
-                        self.selected = self.selected.min(self.selections_list.len() - 1)  
+                        self.selected = self.selected.min(self.selections_list.len() - 1)
                     }
                     if let Page::Gallery = self.current_page {
-                        return self.update_scroll_offset()
+                        return self.update_scroll_offset();
                     }
                 }
                 KeyCode::Down => {
                     self.selected = self.get_bottom();
                     if self.show_selections {
-                        self.selected = self.selected.min(self.selections_list.len() - 1)  
+                        self.selected = self.selected.min(self.selections_list.len() - 1)
                     }
                     if let Page::Gallery = self.current_page {
-                        return self.update_scroll_offset()
+                        return self.update_scroll_offset();
                     }
                 }
                 KeyCode::Equals | KeyCode::Key0 => {
                     self.img_width = self.container_dim.0 / 5;
-                    return self.update_scroll_offset()
+                    return self.update_scroll_offset();
                 }
                 KeyCode::Enter => match self.current_page {
                     Page::Gallery => {
                         self.current_page = Page::ShowImage;
-                        return self.update_preview_data()
+                        return self.update_preview_data();
                     }
                     Page::ShowImage => {
                         self.current_page = Page::Gallery;
-                        return self.update_preview_data()
+                        return self.update_preview_data();
                     }
                     _ => (),
                 },
@@ -307,7 +316,7 @@ impl Fuu {
                     if !self.selections_list.insert(index) {
                         self.selections_list.remove(&index);
                     }
-                },
+                }
                 KeyCode::Space => {
                     if let Page::Gallery = self.current_page {
                         self.show_selections ^= true;
@@ -319,7 +328,7 @@ impl Fuu {
             Message::WindowResize { width, height } => {
                 self.container_dim = (width, height);
                 self.img_width = width / 5;
-                return self.update_scroll_offset()
+                return self.update_scroll_offset();
             }
             Message::ChangeFocus(selected) => {
                 if self.selected == selected {
@@ -327,33 +336,38 @@ impl Fuu {
                     return self.update_preview_data();
                 }
                 self.selected = selected;
-                return self.update_scroll_offset()
+                return self.update_scroll_offset();
             }
             Message::SourcesLoaded(sources) => {
                 let mut image_cards = IndexSet::with_capacity(self.images.len());
-                image_cards.extend(self.images.drain(..).chain(
-                    sources.into_iter().map(ImageCard::new)
-                ));
+                image_cards.extend(
+                    self.images
+                        .drain(..)
+                        .chain(sources.into_iter().map(ImageCard::new)),
+                );
                 self.images = image_cards.into_iter().collect();
                 if !self.images.is_empty() {
                     self.current_page = Page::Gallery;
-                    return Command::perform(async {}, |_| Message::LoadThumbs)
+                    return Command::perform(async {}, |_| Message::LoadThumbs);
                 }
                 self.current_page = Page::Welcome;
             }
-            Message::LoadThumbs => return Command::batch(
-                self.images
-                    .iter()
-                    .enumerate()
-                    .filter(|(_,image_card)| matches!(image_card.thumb_state, ThumbState::Loading))
-                    .take(COMMANDS_NUM)
-                    .map(|(i, image_card)| {
-                        Command::perform(
-                            generate_thumb(image_card.clone()),
-                            move |dim| Message::ThumbLoaded(dim, i),
-                        )
-                    }),
-            ),
+            Message::LoadThumbs => {
+                return Command::batch(
+                    self.images
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, image_card)| {
+                            matches!(image_card.thumb_state, ThumbState::Loading)
+                        })
+                        .take(COMMANDS_NUM)
+                        .map(|(i, image_card)| {
+                            Command::perform(generate_thumb(image_card.clone()), move |dim| {
+                                Message::ThumbLoaded(dim, i)
+                            })
+                        }),
+                )
+            }
             Message::ThumbLoaded(Some(dim), index) => {
                 let image_card = &mut self.images[index];
                 (image_card.width, image_card.height) = dim;
@@ -379,7 +393,7 @@ impl Fuu {
             Message::FileDropped(file_path) => {
                 self.file_drag = false;
                 let sources = ImageSource::Path(file_path);
-                return Command::perform(read_sources(vec![sources]), Message::SourcesLoaded)
+                return Command::perform(read_sources(vec![sources]), Message::SourcesLoaded);
             }
             Message::FileHovered => {
                 self.file_drag = true;
