@@ -2,7 +2,6 @@ use bytes::Bytes;
 use crate::gui::style::DEFAULT_IMG_WIDTH;
 use crate::utils::*;
 use std::path::PathBuf;
-use std::ffi::OsStr;
 use std::hash::{Hash, Hasher};
 
 #[derive(Default, Clone, Debug)]
@@ -35,13 +34,6 @@ impl ImageSource {
         }
     }
 
-    fn as_os_str(&self) -> &OsStr {
-        match self {
-            Self::Url(url) => OsStr::new(url.as_str()),
-            Self::Path(pathbuf) => pathbuf.as_os_str()
-        }
-    }
-
     pub fn as_path(&self) -> PathBuf {
         match self {
             Self::Url(url) => thumb_path(url.as_str()),
@@ -53,18 +45,6 @@ impl ImageSource {
 impl Default for ImageSource {
     fn default() -> Self {
         Self::Path(Default::default())
-    }
-}
-
-impl std::cmp::PartialEq for ImageSource {
-    fn eq(&self, other: &Self) -> bool {
-        self.as_os_str() == other.as_os_str()
-    }
-}
-
-impl Hash for ImageSource {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.as_os_str().hash(state);
     }
 }
 
@@ -127,7 +107,7 @@ impl Default for ImageCard {
 
 impl std::cmp::PartialEq for ImageCard {
     fn eq(&self, other: &Self) -> bool {
-        self.preview == other.preview
+        self.thumb == other.thumb
     }
 }
 
@@ -135,6 +115,6 @@ impl std::cmp::Eq for ImageCard { }
 
 impl Hash for ImageCard {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.preview.hash(state);
+        self.thumb.hash(state);
     }
 }
