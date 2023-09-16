@@ -72,7 +72,7 @@ impl Hash for ImageSource {
 pub struct ImageCard {
     pub width: u32,
     pub height: u32,
-    pub thumb: ImageSource,
+    pub thumb: PathBuf,
     pub preview: ImageSource,
     pub thumb_state: ThumbState,
     pub preview_state: ImageState,
@@ -90,7 +90,7 @@ impl ImageCard {
         let thumb_path = thumb_path(&image_path);
         Self {
             preview: ImageSource::Path(image_path),
-            thumb: ImageSource::Path(thumb_path),
+            thumb: thumb_path,
             ..Default::default()
         }
     }
@@ -99,7 +99,7 @@ impl ImageCard {
         let thumb_path = thumb_path(thumb_path(url.as_str()));
         Self {
             preview: ImageSource::Url(url),
-            thumb: ImageSource::Path(thumb_path),
+            thumb: thumb_path,
             ..Default::default()
         }
     }
