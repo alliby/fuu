@@ -1,4 +1,4 @@
-use iced::widget::button;
+use iced::widget::{button, container};
 use iced::Theme;
 
 pub const CONTAINER_PADDING: u32 = 10;
@@ -11,6 +11,7 @@ pub enum ImageCard {
     #[default]
     Normal,
     Selected,
+    Hovered,
 }
 
 impl button::StyleSheet for ImageCard {
@@ -21,15 +22,38 @@ impl button::StyleSheet for ImageCard {
 
         match self {
             ImageCard::Normal => button::Appearance {
-                border_color: palette.secondary.base.color,
+                border_color: palette.secondary.strong.color,
                 border_width: 2.0,
                 ..Default::default()
             },
-            ImageCard::Selected => button::Appearance {
+            ImageCard::Hovered => button::Appearance {
                 border_color: palette.primary.strong.color,
                 border_width: 2.0,
                 ..Default::default()
             },
+            ImageCard::Selected => button::Appearance {
+                border_color: palette.success.strong.color,
+                border_width: 2.0,
+                ..Default::default()
+            },
+        }
+    }
+}
+
+#[derive(Default)]
+pub struct ModalStyle;
+
+impl container::StyleSheet for ModalStyle {
+    type Style = Theme;
+    
+    fn appearance(&self, style: &Self::Style) -> container::Appearance {
+        let palette = style.palette();
+
+        container::Appearance {
+            text_color: palette.text.into(),
+            background: Some(palette.primary.into()),
+            border_radius: 10.0.into(),
+            ..Default::default()
         }
     }
 }

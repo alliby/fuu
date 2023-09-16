@@ -2,7 +2,7 @@ use iced::alignment;
 use iced::font::Font;
 use iced::widget::{text, Text};
 
-const ICONS: Font = Font::with_name("Font Awesome 6 Free Regular");
+const ICONS: Font = Font::with_name("Toss Face Font Mac");
 
 fn icon(unicode: char) -> Text<'static> {
     text(unicode.to_string())
@@ -13,9 +13,13 @@ fn icon(unicode: char) -> Text<'static> {
 }
 
 pub fn arrow_left_icon() -> Text<'static> {
-    icon('\u{F060}')
+    icon('\u{2B05}')
 }
 
 pub fn arrow_right_icon() -> Text<'static> {
-    icon('\u{F061}')
+    icon('\u{27A1}')
+}
+
+pub fn flower() -> Text<'static> {
+    icon('\u{1F338}')
 }

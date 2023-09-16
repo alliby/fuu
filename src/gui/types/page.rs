@@ -1,7 +1,7 @@
 #[derive(Default)]
 pub enum Page {
     #[default]
-    Loading,
+    Welcome,
     Gallery,
     ShowImage,
     Error(String),

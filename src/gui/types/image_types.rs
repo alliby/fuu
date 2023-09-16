@@ -2,7 +2,6 @@ use bytes::Bytes;
 use crate::gui::style::DEFAULT_IMG_WIDTH;
 use crate::utils::*;
 use std::path::PathBuf;
-use std::ffi::OsStr;
 use std::hash::{Hash, Hasher};
 
 #[derive(Default, Clone, Debug)]
@@ -35,13 +34,6 @@ impl ImageSource {
         }
     }
 
-    fn as_os_str(&self) -> &OsStr {
-        match self {
-            Self::Url(url) => OsStr::new(url.as_str()),
-            Self::Path(pathbuf) => pathbuf.as_os_str()
-        }
-    }
-
     pub fn as_path(&self) -> PathBuf {
         match self {
             Self::Url(url) => thumb_path(url.as_str()),
@@ -56,23 +48,11 @@ impl Default for ImageSource {
     }
 }
 
-impl std::cmp::PartialEq for ImageSource {
-    fn eq(&self, other: &Self) -> bool {
-        self.as_os_str() == other.as_os_str()
-    }
-}
-
-impl Hash for ImageSource {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.as_os_str().hash(state);
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct ImageCard {
     pub width: u32,
     pub height: u32,
-    pub thumb: ImageSource,
+    pub thumb: PathBuf,
     pub preview: ImageSource,
     pub thumb_state: ThumbState,
     pub preview_state: ImageState,
@@ -90,7 +70,7 @@ impl ImageCard {
         let thumb_path = thumb_path(&image_path);
         Self {
             preview: ImageSource::Path(image_path),
-            thumb: ImageSource::Path(thumb_path),
+            thumb: thumb_path,
             ..Default::default()
         }
     }
@@ -99,7 +79,7 @@ impl ImageCard {
         let thumb_path = thumb_path(thumb_path(url.as_str()));
         Self {
             preview: ImageSource::Url(url),
-            thumb: ImageSource::Path(thumb_path),
+            thumb: thumb_path,
             ..Default::default()
         }
     }
@@ -127,7 +107,7 @@ impl Default for ImageCard {
 
 impl std::cmp::PartialEq for ImageCard {
     fn eq(&self, other: &Self) -> bool {
-        self.preview == other.preview
+        self.thumb == other.thumb
     }
 }
 
@@ -135,6 +115,6 @@ impl std::cmp::Eq for ImageCard { }
 
 impl Hash for ImageCard {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.preview.hash(state);
+        self.thumb.hash(state);
     }
 }

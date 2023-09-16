@@ -4,14 +4,14 @@ pub mod style;
 pub mod types;
 pub mod widgets;
 
-use crate::gui::components::{error_view, loading_page};
+use crate::gui::components::{error_view, welcome_page};
 use crate::gui::widgets::modal::Modal;
 use crate::utils::*;
 use fuu::Fuu;
 use iced::font;
 use iced::keyboard::{self, KeyCode};
-use iced::{executor, window, Application, Command, Element, Event, Subscription, Theme, Length};
-use iced::widget::{text, container};
+use iced::widget::{container, text};
+use iced::{executor, window, Application, Command, Element, Event, Subscription, Theme};
 use std::path::PathBuf;
 use types::*;
 
@@ -22,12 +22,13 @@ pub enum Message {
     ChangeFocus(usize),
     FontLoaded(Result<(), font::Error>),
     SourcesLoaded(Vec<ImageSource>),
-    ThumbLoaded(Option<(u32,u32)>, usize),
+    ThumbLoaded(Option<(u32, u32)>, usize),
     PreviewLoaded(Option<bytes::Bytes>, usize),
     FileDropped(PathBuf),
     FileHovered,
     HideOverlay,
     LoadThumbs,
+    CloseRequested,
 }
 
 impl Application for Fuu {
@@ -40,7 +41,9 @@ impl Application for Fuu {
         (
             Self::new(),
             Command::batch([
-                font::load(include_bytes!("../../fonts/icons.otf").as_slice())
+                font::load(include_bytes!("../../fonts/icons-subset.ttf").as_slice())
+                    .map(Message::FontLoaded),
+                font::load(include_bytes!("../../fonts/japanese-subset.ttf").as_slice())
                     .map(Message::FontLoaded),
                 Command::perform(
                     async {
@@ -67,17 +70,18 @@ impl Application for Fuu {
 
     fn view(&self) -> Element<Message> {
         let content = match &self.current_page {
-            Page::Loading => loading_page("loading ..."),
+            Page::Welcome => welcome_page(),
             Page::Gallery => self.gallery_view(),
             Page::ShowImage => self.image_preview(),
             Page::Error(err_msg) => error_view(err_msg),
         };
         if self.file_drag {
             let overlay = container(text("File Hovered"))
-                .width(Length::Fill)
-                .height(Length::Fill)
+                .width(self.container_dim.0 as u16 / 2)
+                .height(self.container_dim.1 as u16 / 2)
                 .center_x()
-                .center_y();
+                .center_y()
+                .style(iced::theme::Container::Custom(Box::new(style::ModalStyle)));
             Modal::new(content, overlay)
                 .on_blur(Message::HideOverlay)
                 .into()
@@ -97,12 +101,9 @@ impl Application for Fuu {
             Event::Window(window::Event::FileDropped(file_path)) => {
                 Some(Message::FileDropped(file_path))
             }
-            Event::Window(window::Event::FileHovered(_)) => {
-                Some(Message::FileHovered)
-            }
-            Event::Window(window::Event::FilesHoveredLeft) => {
-                Some(Message::HideOverlay)
-            }
+            Event::Window(window::Event::FileHovered(_)) => Some(Message::FileHovered),
+            Event::Window(window::Event::FilesHoveredLeft) => Some(Message::HideOverlay),
+            Event::Window(window::Event::CloseRequested) => Some(Message::CloseRequested),
             _ => None,
         })
     }

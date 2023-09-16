@@ -1,23 +1,21 @@
-use std::os::unix::ffi::OsStrExt;
 use crate::gui::types::*;
 use image::error::{ImageError, ImageResult};
 use md5::{Digest, Md5};
 use std::io::BufReader;
 use std::io::Result;
 use std::path::{Path, PathBuf};
-use std::ffi::OsStr;
 use tokio::fs::{self, File};
 use tokio::io::AsyncReadExt;
 use bytes::Bytes;
 
-fn hash<S: AsRef<OsStr>>(file_name: S) -> String {
+fn hash<P: AsRef<Path>>(file_name: P) -> String {
     let mut hasher = Md5::new();
-    hasher.update(file_name.as_ref().as_bytes());
+    hasher.update(file_name.as_ref().to_string_lossy().as_ref());
     let digest = hasher.finalize();
     format!("{:x}.png", digest)
 }
 
-pub fn thumb_path<S: AsRef<OsStr>>(file_name: S) -> PathBuf {
+pub fn thumb_path<P: AsRef<Path>>(file_name: P) -> PathBuf {
     let cache_dir = dirs::cache_dir().unwrap().join("fuu");
     let hashed_name = hash(file_name);
     cache_dir.join(hashed_name)
@@ -107,48 +105,31 @@ pub async fn fetch_source(source: ImageSource) -> Option<Bytes> {
 }
 
 pub async fn generate_thumb(image_card: ImageCard) -> Option<(u32,u32)> {
-    match (image_card.preview, image_card.thumb) {
-        (ImageSource::Path(preview_path), ImageSource::Path(thumb_dest)) => {
-            if preview_path.exists() && thumb_dest.exists() {
-                return image_dimensions(thumb_dest).await.ok()
-            }
+    if image_card.thumb.exists() {
+        return image_dimensions(image_card.thumb).await.ok()
+    }
+    let input_image = match image_card.preview {
+        ImageSource::Path(preview_path) => {
             let input_file = File::open(&preview_path).await.ok()?;
             let reader = BufReader::new(input_file.into_std().await);
-            let input_image = image::io::Reader::new(reader)
+            image::io::Reader::new(reader)
                 .with_guessed_format().ok()?
-                .decode().ok()?;
-            let ratio = input_image.width() as f32 / input_image.height() as f32;
-            let new_height = (image_card.width as f32 / ratio) as u32;
-            let mut writer = File::create(thumb_dest)
-                .await.ok()?
-                .into_std()
-                .await;
-            let thumb_image = input_image.thumbnail(image_card.width, image_card.height);
-            thumb_image.write_to(&mut writer, image::ImageFormat::Png).ok()?;
-            Some((image_card.width, new_height))
+                .decode().ok()?
         }
-        (ImageSource::Url(preview_url), ImageSource::Path(thumb_dest)) => {
+        ImageSource::Url(preview_url) => {
             let preview_path = thumb_path(preview_url.as_str());
-            if preview_path.exists() && thumb_dest.exists() {
-                return image_dimensions(thumb_dest).await.ok()
-            }
             let preview_data = fetch_url(preview_url).await.ok()?;
-            let input_image = image::load_from_memory(&preview_data).ok()?;
-            let ratio = input_image.width() as f32 / input_image.height() as f32;
-            let new_height = (image_card.width as f32 / ratio) as u32;
-            if !thumb_dest.exists() {
-                let mut thumb_writer = File::create(thumb_dest)
-                    .await.ok()?
-                    .into_std()
-                    .await;
-                let thumb_image = input_image.thumbnail(image_card.width, image_card.height);
-                thumb_image.write_to(&mut thumb_writer, image::ImageFormat::Png).ok()?;
-            }
-            if !preview_path.exists() {
-                fs::write(preview_path, preview_data).await.ok()?;
-            }
-            Some((image_card.width, new_height))
+            fs::write(preview_path, &preview_data).await.ok()?;
+            image::load_from_memory(&preview_data).ok()?
         }
-        _ => None,
-    }
+    };
+    let ratio = input_image.width() as f32 / input_image.height() as f32;
+    let new_height = (image_card.width as f32 / ratio) as u32;
+    let mut writer = File::create(image_card.thumb)
+        .await.ok()?
+        .into_std()
+        .await;
+    let thumb_image = input_image.thumbnail(image_card.width, new_height);
+    thumb_image.write_to(&mut writer, image::ImageFormat::Png).ok()?;
+    Some((image_card.width, new_height))
 }
