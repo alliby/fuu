@@ -183,7 +183,7 @@ impl Fuu {
                     .center_y(),
             ),
             ThumbState::Loaded => Element::new(
-                Image::new(Handle::from_path(image_card.thumb.as_path()))
+                Image::new(Handle::from_path(&image_card.thumb))
                     .width(w as u16)
                     .height(h as u16),
             ),
@@ -338,10 +338,12 @@ impl Fuu {
         match message {
             Message::CloseRequested => {
                 let mut stdout = io::stdout().lock();
-                self.selections_list
-                    .iter()
-                    .map(|index| &self.images[*index])
-                    .for_each(|image| writeln!(&mut stdout, "{:?}", image.preview).unwrap());
+                for index in &self.selections_list {
+                    let source_path = self.images[*index].preview.as_path();
+                    if source_path.exists() {
+                        writeln!(&mut stdout, "{}", source_path.display()).unwrap()
+                    }
+                }
                 std::process::exit(0)
             }
             Message::KeyPress(key) => return self.handle_keypress(key),
