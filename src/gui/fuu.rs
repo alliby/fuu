@@ -231,6 +231,109 @@ impl Fuu {
             .into()
     }
 
+    fn handle_keypress(&mut self, key: KeyCode) -> Command<Message> {
+        if let Page::Welcome | Page::Error(_) = self.current_page {
+            return Command::none()
+        }
+        match key {
+            KeyCode::Plus | KeyCode::NumpadAdd => {
+                self.img_width += 20;
+                self.img_width = self.img_width.min(self.container_dim.0);
+                return self.update_scroll_offset();
+            }
+            KeyCode::Minus | KeyCode::NumpadSubtract => {
+                self.img_width -= 20;
+                self.img_width = self.img_width.max(DEFAULT_IMG_WIDTH / 2);
+                return self.update_scroll_offset();
+            }
+            KeyCode::Left | KeyCode::P => {
+                self.selected = self.get_backward();
+                if self.show_selections {
+                    self.selected = self.selected.min(self.selections_list.len() - 1)
+                }
+                match self.current_page {
+                    Page::Gallery => return self.update_scroll_offset(),
+                    Page::ShowImage => return self.update_preview_data(),
+                    _ => (),
+                }
+            }
+            KeyCode::Right | KeyCode::N => {
+                self.selected = self.get_forward();
+                if self.show_selections {
+                    self.selected = self.selected.min(self.selections_list.len() - 1)
+                }
+                match self.current_page {
+                    Page::Gallery => return self.update_scroll_offset(),
+                    Page::ShowImage => return self.update_preview_data(),
+                    _ => (),
+                }
+            }
+            KeyCode::Up => {
+                self.selected = self.get_top();
+                if self.show_selections {
+                    self.selected = self.selected.min(self.selections_list.len() - 1)
+                }
+                if let Page::Gallery = self.current_page {
+                    return self.update_scroll_offset();
+                }
+            }
+            KeyCode::Down => {
+                self.selected = self.get_bottom();
+                if self.show_selections {
+                    self.selected = self.selected.min(self.selections_list.len() - 1)
+                }
+                if let Page::Gallery = self.current_page {
+                    return self.update_scroll_offset();
+                }
+            }
+            KeyCode::Equals | KeyCode::Key0 => {
+                self.img_width = self.container_dim.0 / 5;
+                return self.update_scroll_offset();
+            }
+            KeyCode::Enter => match self.current_page {
+                Page::Gallery => {
+                    self.current_page = Page::ShowImage;
+                    return self.update_preview_data();
+                }
+                Page::ShowImage => {
+                    self.current_page = Page::Gallery;
+                    return self.update_scroll_offset();
+                }
+                _ => (),
+            },
+            KeyCode::M => {
+                let index = if self.show_selections {
+                    self.selections_list[self.selected]
+                } else {
+                    self.selected
+                };
+                if !self.selections_list.insert(index) {
+                    self.selections_list.remove(&index);
+                }
+            }
+            KeyCode::Space => {
+                if let Page::Gallery = self.current_page {
+                    self.show_selections ^= true;
+                    self.selected = 0;
+                }
+            }
+            KeyCode::Escape => {
+                match self.current_page {
+                    Page::Gallery => if self.show_selections {
+                        self.show_selections = false;
+                        self.selected = self.selections_list[self.selected];
+                    }
+                    Page::ShowImage => {
+                        self.current_page = Page::Gallery;
+                    }
+                    _ => return Command::perform(async {}, |_| Message::CloseRequested)
+                }
+            }
+            _ => (),
+        }
+        Command::none()
+    }
+    
     pub fn update(&mut self, message: Message) -> Command<Message> {
         match message {
             Message::CloseRequested => {
@@ -241,90 +344,7 @@ impl Fuu {
                     .for_each(|image| writeln!(&mut stdout, "{:?}", image.preview).unwrap());
                 std::process::exit(0)
             }
-            Message::KeyPress(key) => match key {
-                KeyCode::Plus | KeyCode::NumpadAdd => {
-                    self.img_width += 20;
-                    self.img_width = self.img_width.min(self.container_dim.0);
-                    return self.update_scroll_offset();
-                }
-                KeyCode::Minus | KeyCode::NumpadSubtract => {
-                    self.img_width -= 20;
-                    self.img_width = self.img_width.max(DEFAULT_IMG_WIDTH / 2);
-                    return self.update_scroll_offset();
-                }
-                KeyCode::Left | KeyCode::P => {
-                    self.selected = self.get_backward();
-                    if self.show_selections {
-                        self.selected = self.selected.min(self.selections_list.len() - 1)
-                    }
-                    match self.current_page {
-                        Page::Gallery => return self.update_scroll_offset(),
-                        Page::ShowImage => return self.update_preview_data(),
-                        _ => (),
-                    }
-                }
-                KeyCode::Right | KeyCode::N => {
-                    self.selected = self.get_forward();
-                    if self.show_selections {
-                        self.selected = self.selected.min(self.selections_list.len() - 1)
-                    }
-                    match self.current_page {
-                        Page::Gallery => return self.update_scroll_offset(),
-                        Page::ShowImage => return self.update_preview_data(),
-                        _ => (),
-                    }
-                }
-                KeyCode::Up => {
-                    self.selected = self.get_top();
-                    if self.show_selections {
-                        self.selected = self.selected.min(self.selections_list.len() - 1)
-                    }
-                    if let Page::Gallery = self.current_page {
-                        return self.update_scroll_offset();
-                    }
-                }
-                KeyCode::Down => {
-                    self.selected = self.get_bottom();
-                    if self.show_selections {
-                        self.selected = self.selected.min(self.selections_list.len() - 1)
-                    }
-                    if let Page::Gallery = self.current_page {
-                        return self.update_scroll_offset();
-                    }
-                }
-                KeyCode::Equals | KeyCode::Key0 => {
-                    self.img_width = self.container_dim.0 / 5;
-                    return self.update_scroll_offset();
-                }
-                KeyCode::Enter => match self.current_page {
-                    Page::Gallery => {
-                        self.current_page = Page::ShowImage;
-                        return self.update_preview_data();
-                    }
-                    Page::ShowImage => {
-                        self.current_page = Page::Gallery;
-                        return self.update_preview_data();
-                    }
-                    _ => (),
-                },
-                KeyCode::M => {
-                    let index = if self.show_selections {
-                        self.selections_list[self.selected]
-                    } else {
-                        self.selected
-                    };
-                    if !self.selections_list.insert(index) {
-                        self.selections_list.remove(&index);
-                    }
-                }
-                KeyCode::Space => {
-                    if let Page::Gallery = self.current_page {
-                        self.show_selections ^= true;
-                        self.selected = 0;
-                    }
-                }
-                _ => (),
-            },
+            Message::KeyPress(key) => return self.handle_keypress(key),
             Message::WindowResize { width, height } => {
                 self.container_dim = (width, height);
                 self.img_width = width / 5;
