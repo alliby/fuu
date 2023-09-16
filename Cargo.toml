@@ -2,12 +2,19 @@
 name = "fuu"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+repository = "https://github.com/alliby/fuu/"
+description = "Simple Image Viewer"
+exclude = [
+  "fonts/NotoSansJP-Regular.ttf",
+  "fonts/TossFaceFontMac.ttf"
+]
 
 [dependencies]
 once_cell = "1"
 bytes = "1"
 dirs = "5.0.1"
-iced = { git = "https://github.com/iced-rs/iced/", features = ["image", "tokio", "advanced"] }
+iced = { version = "0.10.0", features = ["image", "tokio", "advanced"] }
 image = "0.24.6"
 infer = { version = "0.15.0", default-features = false }
 md-5 = "0.10.5"
