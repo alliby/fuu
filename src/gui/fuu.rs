@@ -309,12 +309,20 @@ impl Fuu {
                 };
                 if !self.selections_list.insert(index) {
                     self.selections_list.remove(&index);
+                    if self.selections_list.is_empty() {
+                        self.show_selections = false;
+                        self.selected = 0;
+                    }
                 }
             }
             KeyCode::Space => {
                 if let Page::Gallery = self.current_page {
-                    self.show_selections ^= true;
-                    self.selected = 0;
+                    if self.selections_list.is_empty() {
+                        self.show_selections = false;
+                    } else {
+                        self.show_selections ^= true;
+                        self.selected = 0;
+                    }
                 }
             }
             KeyCode::Escape => {
