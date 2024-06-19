@@ -25,13 +25,13 @@ impl Theme {
     ];
 
     pub const LIGHT: Theme = Theme {
-        background: color(0xf3f3f3),
+        background: color(0xffffff),
         highlight: color(0x010101),
         lowlight: color(0xced4da),
     };
 
     pub const DARK: Theme = Theme {
-        background: color(0x000000),
+        background: color(0x161616),
         highlight: color(0xffffff),
         lowlight: color(0x808080),
     };

@@ -21,10 +21,26 @@ enum Direction {
     Right,
 }
 
+#[derive(Copy, Clone, Debug)]
+pub enum Page {
+    Gallery,
+    Preview,
+}
+
+impl Page {
+    pub fn next(&self) -> Self {
+        match self {
+            Self::Gallery => Self::Preview,
+            Self::Preview => Self::Gallery,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct AppState {
     pub active: usize,
     pub active_theme: usize,
+    pub page: Page,
     pub col_num: usize,
     pub row_num: usize,
     pub images: Vec<PathBuf>,
@@ -38,6 +54,7 @@ impl AppState {
             images,
             active: 0,
             active_theme: 0,
+            page: Page::Gallery,
             col_num: DEFAULT_COL_NUM,
             row_num: DEFAULT_ROW_NUM,
             window_size: (WINDOW_WIDTH, WINDOW_HEIGHT),
@@ -72,33 +89,34 @@ pub fn handle_key(app: &mut AppState, event: &KeyEvent) -> bool {
         return false;
     }
 
-    match event.logical_key.as_ref() {
-        Key::Character(char) if char == "q" => std::process::exit(0),
-        Key::Character(char) if char == "s" => {
+    match (app.page, event.logical_key.as_ref()) {
+        (_, Key::Character(char)) if char == "q" => std::process::exit(0),
+        (_, Key::Character(char)) if char == "s" => {
             app.active_theme = (app.active_theme + 1) % Theme::ALL.len();
         }
-        Key::Character(char) if char == "S" => {
+        (_, Key::Character(char)) if char == "S" => {
             if app.active_theme == 0 {
                 app.active_theme = Theme::ALL.len() - 1;
                 return true;
             }
             app.active_theme = app.active_theme.saturating_sub(1) % Theme::ALL.len()
         }
-        Key::Character(char) if char == "+" => {
+        (Page::Gallery, Key::Character(char)) if char == "+" => {
             app.col_num = (app.col_num - 1).max(MIN_AXE_NUM);
             app.row_num = (app.row_num - 1).max(MIN_AXE_NUM);
         }
-        Key::Character(char) if char == "-" => {
+        (Page::Gallery, Key::Character(char)) if char == "-" => {
             app.col_num = (app.col_num + 1).min(MAX_AXE_NUM);
             app.row_num = (app.row_num + 1).min(MAX_AXE_NUM);
         }
 
-        Key::Named(ArrowRight) => app.navigate(Right, 1),
-        Key::Named(ArrowLeft) => app.navigate(Left, 1),
-        Key::Named(ArrowUp) => app.navigate(Up, 1),
-        Key::Named(ArrowDown) => app.navigate(Down, 1),
-        Key::Named(PageUp) => app.navigate(Up, app.col_num),
-        Key::Named(PageDown) => app.navigate(Down, app.col_num),
+        (_, Key::Named(ArrowRight)) => app.navigate(Right, 1),
+        (_, Key::Named(ArrowLeft)) => app.navigate(Left, 1),
+        (_, Key::Named(ArrowUp)) => app.navigate(Up, 1),
+        (_, Key::Named(ArrowDown)) => app.navigate(Down, 1),
+        (Page::Gallery, Key::Named(PageUp)) => app.navigate(Up, app.col_num),
+        (Page::Gallery, Key::Named(PageDown)) => app.navigate(Down, app.col_num),
+        (_, Key::Named(Enter)) => app.page = app.page.next(),
         _ => return false,
     }
     true

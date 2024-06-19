@@ -1,4 +1,4 @@
-use super::{AppState, Theme};
+use super::{AppState, Page, Theme};
 use crate::image::*;
 
 use vello::kurbo::{Affine, CircleSegment, Rect, RoundedRect, Stroke};
@@ -19,23 +19,54 @@ const GRID_GAP_Y: f64 = 13.0;
 
 const CARD_THICK: f64 = 5.0;
 
-#[derive(Clone, Default)]
-pub struct Scenes {
-    pub main: Scene,
-    pub scrollbar: Scene,
-    pub images: Scene,
+pub fn draw(scene: &mut Scene, app: &AppState) -> bool {
+    scene.reset();
+    let mut redraw = false;
+    match app.page {
+        Page::Gallery => {
+            draw_scrollbar(scene, &app);
+            redraw |= draw_grid(scene, &app);
+        }
+        Page::Preview => {
+            redraw |= draw_preview(scene, &app);
+        }
+    }
+    redraw
 }
 
-pub fn draw(scenes: &mut Scenes, app: &AppState) -> bool {
+fn draw_preview(scene: &mut Scene, app: &AppState) -> bool {
     let mut redraw = false;
-    scenes.main.reset();
-    scenes.images.reset();
-    scenes.scrollbar.reset();
-    draw_scrollbar(&mut scenes.scrollbar, &app);
-    redraw |= draw_grid(&mut scenes.images, &app);
-    scenes.main.append(&scenes.scrollbar, None);
-    scenes.main.append(&scenes.images, None);
+    let (width, height) = app.window_size;
+    let rect = Rect::new(0.0, 0.0, width as f64, height as f64);
+    let image_state = get_image(&app.images[app.active], ImageSize::Preview);
+    match image_state {
+        ImageState::Loading => {
+            let color = Theme::ALL[app.active_theme].highlight;
+            let time = app.start_time.elapsed().as_secs_f64();
+            draw_spinner(scene, rect, Affine::IDENTITY, time, color);
+            redraw = true;
+        }
+        ImageState::Loaded(ref image) => {
+            draw_image_viewer(scene, image, rect);
+        }
+    }
     redraw
+}
+
+fn draw_image_viewer(scene: &mut Scene, image: &Image, rect: Rect) {
+    let size = rect.size();
+    let cw = size.width;
+    let ch = size.height;
+    let scale = (cw / image.width as f64).min(ch / image.height as f64);
+    let sw = image.width as f64 * scale;
+    let sh = image.height as f64 * scale;
+    scene.fill(
+        Fill::NonZero,
+        Affine::translate(((cw - sw) / 2.0, (ch - sh) / 2.0)),
+        image,
+        Affine::scale(scale).into(),
+        &rect,
+    );
 }
 
 fn draw_scrollbar(scene: &mut Scene, app: &AppState) {
@@ -103,16 +134,16 @@ fn draw_grid(scene: &mut Scene, app: &AppState) -> bool {
             } else {
                 Theme::ALL[app.active_theme].lowlight
             };
-            let image_state = get_image(&app.images[index]);
-            // let image_state = ImageState::Loading;
+            let image_state = get_image(&app.images[index], ImageSize::Thumbnail);
             match image_state {
                 ImageState::Loading => {
                     let time = app.start_time.elapsed().as_secs_f64();
+                    draw_border(scene, card_rect, translate, color);
                     draw_spinner(scene, card_rect, translate, time, color);
                     redraw = true;
                 }
                 ImageState::Loaded(ref image) => {
-                    draw_image(scene, image, card_rect, translate, color)
+                    draw_image(scene, image, card_rect, translate, color);
                 }
             }
         }
@@ -129,7 +160,6 @@ fn draw_border(scene: &mut Scene, rect: Rect, trans: Affine, color: Color) {
 
 fn draw_spinner(scene: &mut Scene, rect: Rect, trans: Affine, t: f64, color: Color) {
     let radius = 0.1 * rect.size().to_vec2().length();
-    draw_border(scene, rect, trans, color);
     let spinner = CircleSegment::new(
         rect.center(),
         radius,

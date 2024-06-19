@@ -4,13 +4,13 @@ pub mod scenes;
 pub mod themes;
 pub mod utils;
 
-use app::{handle_key, AppState};
-use scenes::Scenes;
+use app::{handle_key, AppState, Page};
 use themes::Theme;
 
 use anyhow::Result;
 use std::sync::Arc;
 use vello::util::{RenderContext, RenderSurface};
+use vello::Scene;
 use vello::{AaConfig, Renderer, RendererOptions};
 use winit::event::*;
 use winit::event_loop::EventLoop;
@@ -50,14 +50,14 @@ fn main() -> Result<()> {
         wgpu::PresentMode::AutoVsync,
     );
 
-    let surface = pollster::block_on(surface_future).expect("Error creating surface");
+    let surface = pollster::block_on(surface_future).expect("Failed to initialize the surface");
 
     // Create a vello Renderer for the surface (using its device id)
     renderers.resize_with(render_cx.devices.len(), || None);
     renderers[surface.dev_id].get_or_insert_with(|| create_vello_renderer(&render_cx, &surface));
 
     let mut app_state = AppState::new(paths);
-    let mut scenes = Scenes::default();
+    let mut scene = Scene::new();
     let mut render_state = RenderState {
         surface,
         window: window.clone(),
@@ -84,8 +84,8 @@ fn main() -> Result<()> {
                     // Get a handle to the device
                     let device_handle = &render_cx.devices[render_state.surface.dev_id];
 
-                    let request_redraw = scenes::draw(&mut scenes, &mut app_state);
-                    if request_redraw {
+                    let redraw = scenes::draw(&mut scene, &mut app_state);
+                    if redraw {
                         render_state.window.request_redraw();
                     }
 
@@ -104,7 +104,7 @@ fn main() -> Result<()> {
                         .render_to_surface(
                             &device_handle.device,
                             &device_handle.queue,
-                            &scenes.main,
+                            &scene,
                             &surface_texture,
                             &vello::RenderParams {
                                 base_color: Theme::ALL[app_state.active_theme].background, // Background color

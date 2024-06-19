@@ -22,10 +22,10 @@ fn read_dir(path: impl AsRef<Path>) -> impl Iterator<Item = PathBuf> {
 pub fn read_args() -> Vec<PathBuf> {
     let mut sources = Vec::new();
     for path in std::env::args().skip(1).map(PathBuf::from) {
-        if path.is_file() && is_image(&path) {
-            sources.push(path)
-        } else if path.is_dir() {
+        if path.is_dir() {
             sources.extend(read_dir(path).filter(|img| is_image(img)))
+        } else if is_image(&path) {
+            sources.push(path)
         }
     }
     sources
