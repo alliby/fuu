@@ -1,4 +1,5 @@
-use super::{AppState, Page, Theme};
+use crate::themes::Theme;
+use crate::state::{AppState, Page};
 use crate::image::*;
 
 use vello::kurbo::{Affine, CircleSegment, Rect, RoundedRect, Stroke};

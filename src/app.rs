@@ -1,123 +1,163 @@
-use super::Theme;
-use std::path::PathBuf;
-use std::time::Instant;
-use winit::event::ElementState;
-use winit::event::KeyEvent;
-use winit::keyboard::Key;
+use crate::scenes;
+use crate::state::{handle_key, AppState};
+use crate::themes::Theme;
 
-const WINDOW_WIDTH: u32 = 1044;
-const WINDOW_HEIGHT: u32 = 800;
+use std::num::NonZeroUsize;
+use std::sync::Arc;
+use vello::util::{RenderContext, RenderSurface};
+use vello::{AaConfig, Renderer, RendererOptions, Scene};
+use winit::application::ApplicationHandler;
+use winit::event::*;
+use winit::event_loop::ActiveEventLoop;
+use winit::window::{Window, WindowId};
 
-const DEFAULT_COL_NUM: usize = 2;
-const DEFAULT_ROW_NUM: usize = 1;
-const MIN_AXE_NUM: usize = 1;
-const MAX_AXE_NUM: usize = 10;
+use vello::wgpu;
 
-#[derive(Copy, Clone, Debug)]
-enum Direction {
-    Up,
-    Down,
-    Left,
-    Right,
+// Simple struct to hold the state of the renderer
+pub struct ActiveRenderState<'s> {
+    // The fields MUST be in this order, so that the surface is dropped before the window
+    surface: RenderSurface<'s>,
+    window: Arc<Window>,
 }
 
-#[derive(Copy, Clone, Debug)]
-pub enum Page {
-    Gallery,
-    Preview,
+pub enum RenderState<'s> {
+    Active(ActiveRenderState<'s>),
+    // Cache a window so that it can be reused when the app is resumed after being suspended
+    Suspended(Option<Arc<Window>>),
 }
 
-impl Page {
-    pub fn next(&self) -> Self {
-        match self {
-            Self::Gallery => Self::Preview,
-            Self::Preview => Self::Gallery,
-        }
-    }
+pub struct App<'a> {
+    pub context: RenderContext,
+    pub renderers: Vec<Option<Renderer>>,
+    pub render_state: RenderState<'a>,
+    pub app_state: AppState,
+    pub scene: Scene,
 }
 
-#[derive(Debug)]
-pub struct AppState {
-    pub active: usize,
-    pub active_theme: usize,
-    pub page: Page,
-    pub col_num: usize,
-    pub row_num: usize,
-    pub images: Vec<PathBuf>,
-    pub window_size: (u32, u32),
-    pub start_time: Instant,
-}
-
-impl AppState {
-    pub fn new(images: Vec<PathBuf>) -> Self {
-        Self {
-            images,
-            active: 0,
-            active_theme: 0,
-            page: Page::Gallery,
-            col_num: DEFAULT_COL_NUM,
-            row_num: DEFAULT_ROW_NUM,
-            window_size: (WINDOW_WIDTH, WINDOW_HEIGHT),
-            start_time: Instant::now(),
-        }
-    }
-
-    fn navigate(&mut self, direction: Direction, num: usize) {
-        let new_active = match direction {
-            Direction::Up => self.active.saturating_sub(self.col_num * num),
-            Direction::Right => (self.active + num).min(self.images.len() - 1),
-            Direction::Down => (self.active + num * self.col_num).min(self.images.len() - 1),
-            Direction::Left => self.active.saturating_sub(num),
+impl<'a> ApplicationHandler for App<'a> {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        let RenderState::Suspended(cached_window) = &mut self.render_state else {
+            return;
         };
 
-        self.active = if new_active == self.active {
-            match direction {
-                Direction::Up | Direction::Left => self.images.len() - 1,
-                Direction::Right | Direction::Down => 0,
-            }
-        } else {
-            new_active
+        // Get the winit window cached in a previous Suspended event or else create a new window
+        let window = cached_window
+            .take()
+            .unwrap_or_else(|| create_winit_window(event_loop));
+
+        // Create a vello surface
+        let size = window.inner_size();
+        let surface_future = self.context.create_surface(
+            window.clone(),
+            size.width,
+            size.height,
+            wgpu::PresentMode::AutoVsync,
+        );
+        let surface = pollster::block_on(surface_future).expect("Error Creating surface");
+
+        // Create a vello Renderer for the surface (using its device id)
+        self.renderers
+            .resize_with(self.context.devices.len(), || None);
+        self.renderers[surface.dev_id]
+            .get_or_insert_with(|| create_vello_renderer(&self.context, &surface));
+
+        // Save the Window and Surface to a state variable
+        self.render_state = RenderState::Active(ActiveRenderState { window, surface });
+    }
+
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, _: WindowId, event: WindowEvent) {
+        let RenderState::Active(ref mut render_state) = self.render_state else {
+            return;
         };
+
+        match event {
+            // Exit the event loop when a close is requested (e.g. window's close button is pressed)
+            WindowEvent::CloseRequested => event_loop.exit(),
+
+            // Resize the surface when the window is resized
+            WindowEvent::Resized(size) => {
+		if size.width == 0 && size.height == 0 {
+		    return;
+		}
+                self.app_state.window_size = (size.width, size.height);
+                self.context
+                    .resize_surface(&mut render_state.surface, size.width, size.height);
+                render_state.window.request_redraw();
+            }
+
+            // This is where all the rendering happens
+            WindowEvent::RedrawRequested => {
+                // Get the window size
+                let width = render_state.surface.config.width;
+                let height = render_state.surface.config.height;
+                // Get a handle to the device
+                let device_handle = &self.context.devices[render_state.surface.dev_id];
+
+                let redraw = scenes::draw(&mut self.scene, &mut self.app_state);
+
+                if redraw {
+                    render_state.window.request_redraw();
+                }
+
+                let surface = &render_state.surface;
+
+                // Get the surface's texture
+                let surface_texture = surface
+                    .surface
+                    .get_current_texture()
+                    .expect("failed to get surface texture");
+
+                // Render to the surface's texture
+                self.renderers[surface.dev_id]
+                    .as_mut()
+                    .unwrap()
+                    .render_to_surface(
+                        &device_handle.device,
+                        &device_handle.queue,
+                        &self.scene,
+                        &surface_texture,
+                        &vello::RenderParams {
+                            base_color: Theme::ALL[self.app_state.active_theme].background, // Background color
+                            width,
+                            height,
+                            antialiasing_method: AaConfig::Msaa8,
+                        },
+                    )
+                    .expect("failed to render to surface");
+
+                // Queue the texture to be presented on the surface
+                surface_texture.present();
+
+                device_handle.device.poll(wgpu::Maintain::Poll);
+            }
+            WindowEvent::KeyboardInput { event, .. } => {
+                if handle_key(&mut self.app_state, &event) {
+                    render_state.window.request_redraw();
+                }
+            }
+            _ => {}
+        }
     }
 }
 
-pub fn handle_key(app: &mut AppState, event: &KeyEvent) -> bool {
-    use winit::keyboard::NamedKey::*;
-    use Direction::*;
+/// Helper function that creates a Winit window and returns it (wrapped in an Arc for sharing between threads)
+fn create_winit_window(event_loop: &ActiveEventLoop) -> Arc<Window> {
+    let attr = Window::default_attributes()
+        .with_resizable(true)
+        .with_title("Fuu - Image Viewer");
+    Arc::new(event_loop.create_window(attr).unwrap())
+}
 
-    if event.state != ElementState::Pressed {
-        return false;
-    }
-
-    match (app.page, event.logical_key.as_ref()) {
-        (_, Key::Character(char)) if char == "q" => std::process::exit(0),
-        (_, Key::Character(char)) if char == "s" => {
-            app.active_theme = (app.active_theme + 1) % Theme::ALL.len();
-        }
-        (_, Key::Character(char)) if char == "S" => {
-            if app.active_theme == 0 {
-                app.active_theme = Theme::ALL.len() - 1;
-                return true;
-            }
-            app.active_theme = app.active_theme.saturating_sub(1) % Theme::ALL.len()
-        }
-        (Page::Gallery, Key::Character(char)) if char == "+" => {
-            app.col_num = (app.col_num - 1).max(MIN_AXE_NUM);
-            app.row_num = (app.row_num - 1).max(MIN_AXE_NUM);
-        }
-        (Page::Gallery, Key::Character(char)) if char == "-" => {
-            app.col_num = (app.col_num + 1).min(MAX_AXE_NUM);
-            app.row_num = (app.row_num + 1).min(MAX_AXE_NUM);
-        }
-
-        (_, Key::Named(ArrowRight)) => app.navigate(Right, 1),
-        (_, Key::Named(ArrowLeft)) => app.navigate(Left, 1),
-        (_, Key::Named(ArrowUp)) => app.navigate(Up, 1),
-        (_, Key::Named(ArrowDown)) => app.navigate(Down, 1),
-        (Page::Gallery, Key::Named(PageUp)) => app.navigate(Up, app.col_num),
-        (Page::Gallery, Key::Named(PageDown)) => app.navigate(Down, app.col_num),
-        (_, Key::Named(Enter)) => app.page = app.page.next(),
-        _ => return false,
-    }
-    true
+/// Helper function that creates a vello `Renderer` for a given `RenderContext` and `RenderSurface`
+fn create_vello_renderer(render_cx: &RenderContext, surface: &RenderSurface) -> Renderer {
+    Renderer::new(
+        &render_cx.devices[surface.dev_id].device,
+        RendererOptions {
+            surface_format: Some(surface.format),
+            use_cpu: false,
+            antialiasing_support: vello::AaSupport::all(),
+            num_init_threads: NonZeroUsize::new(1),
+        },
+    )
+    .expect("Couldn't create renderer")
 }

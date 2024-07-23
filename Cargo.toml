@@ -4,11 +4,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-vello = { version = "0.1.0" }
+vello = "0.2.0"
 anyhow = "1.0.80"
 pollster = "0.3.0"
-wgpu = "0.19.3"
-winit = "0.29.12"
+winit = "0.30"
 image = "0.25.0"
 rayon = "1.10.0"
 infer = { version = "0.15.0", default-features = false }
